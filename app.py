@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
 import math
+import re
 
-# --- SAYFA VE ARAYÜZ YAPILANDIRMASI ---
+# --- SAYFA YAPILANDIRMASI ---
 st.set_page_config(
     page_title="Avonni 4'lü Arama ve Kâr Analiz İstasyonu",
     page_icon="💡",
@@ -10,28 +11,17 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- GOOGLE SHEETS & DRIVE ADRESLERİ ---
+# --- GOOGLE SHEETS & DRIVE ID ---
 SHEET_ID = "1F_kdWWEPL6GnlCzk3B9Ji1OoE-juZkCSZegyqbgFg1o"
 DRIVE_FOLDER_ID = "1meshrbBNQqyE0qXRbZ338ndBDnbDl56T"
 
-# Koyu Tema ve Modern Mobil Düzen CSS
-st.markdown("""
-    <style>
-    .stApp { background-color: #121212; color: #e0e0e0; }
-    div[data-baseweb="input"] { background-color: #1e1e1e !important; border-color: #2c3e50 !important; border-radius: 6px; }
-    input { color: #ffffff !important; font-weight: 600; }
-    div[data-testid="stMetricValue"] { font-size: 20px !important; font-weight: bold; }
-    .card-box { background-color: #1e1e1e; padding: 15px; border-radius: 8px; border: 1px solid #2c3e50; margin-bottom: 10px; }
-    </style>
-""", unsafe_allow_html=True)
-
-# SÜTUN HARF TANIMLAMALARI (Masaüstü Mantığı Birebir)
 def harf_to_indeks(harf):
     indeks = 0
     for char in harf.upper():
         indeks = indeks * 26 + (ord(char) - ord('A') + 1)
     return indeks - 1
 
+# SÜTUN İNDEKSLERİ
 HARF_ANA_KOD = harf_to_indeks("B")
 HARF_MULTI_KOD = harf_to_indeks("C")
 HARF_BARKOD = harf_to_indeks("D")
@@ -61,29 +51,35 @@ KARGO_HARF_DHL = harf_to_indeks("C")
 KARGO_HARF_HJ = harf_to_indeks("D")
 KARGO_HARF_HJXL = harf_to_indeks("K")
 
-# --- VERİ MÖDÜLÜ ---
-@st.cache_data(ttl=60)
-def load_data():
-    url_genel = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=GENEL"
-    url_kargo = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=KARGO"
+# --- KUSURSUZ SAYI DÖNÜŞTÜRÜCÜ (BİNLİK / ONDALIK DÜZELTİCİ) ---
+def clean_float(val):
+    if pd.isna(val) or val is None:
+        return 0.0
+    s = str(val).strip()
+    if not s or s == "--":
+        return 0.0
+    s = re.sub(r"[^\d,\.]", "", s)
+    if not s:
+        return 0.0
     
-    df_genel = pd.read_csv(url_genel, header=None)
-    df_kargo = pd.read_csv(url_kargo, header=None)
-    return df_genel, df_kargo
-
-def parse_float(val):
-    if pd.isna(val): return 0.0
-    try:
-        s = str(val).replace("TL", "").replace("tl", "").strip()
+    # Türkiye Formatı Düzeltme (11.748,00 -> 11748.00 veya 11.748 -> 11748.0)
+    if "," in s and "." in s:
         s = s.replace(".", "").replace(",", ".")
+    elif "," in s:
+        s = s.replace(",", ".")
+    elif "." in s:
+        parts = s.split(".")
+        if len(parts) == 2 and len(parts[1]) == 3: # 11.748 biçimindeyse binlik noktadır
+            s = s.replace(".", "")
+    try:
         return float(s)
     except:
-        try: return float(val)
-        except: return 0.0
+        return 0.0
 
 def format_money(val):
-    num = parse_float(val)
-    if num == 0.0 and (pd.isna(val) or str(val).strip() in ["", "--"]): return "-- TL"
+    num = clean_float(val)
+    if num == 0.0 and (pd.isna(val) or str(val).strip() in ["", "--"]):
+        return "-- TL"
     if num.is_integer():
         return f"{int(num):,}".replace(",", ".") + " TL"
     else:
@@ -92,9 +88,19 @@ def format_money(val):
         return main_p.replace(",", ".") + "," + dec_p + " TL"
 
 def text_clean(val):
-    if pd.isna(val): return ""
+    if pd.isna(val) or val is None: return ""
     s = str(val).replace(".0", "").strip()
     return "" if s.lower() == "nan" else s
+
+# --- VERİ YÜKLEME ---
+@st.cache_data(ttl=30)
+def load_data():
+    url_genel = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=GENEL"
+    url_kargo = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=KARGO"
+    
+    df_genel = pd.read_csv(url_genel, header=None, dtype=str)
+    df_kargo = pd.read_csv(url_kargo, header=None, dtype=str)
+    return df_genel, df_kargo
 
 st.title("💡 Avonni 4'lü Arama ve Kâr Analiz İstasyonu")
 
@@ -104,14 +110,14 @@ except Exception as e:
     st.error(f"Google Sheets erişim hatası: {e}")
     st.stop()
 
-# --- 1. ÜST ARAMA PANELİ ---
+# --- ÜST ARAMA PANELİ ---
 st.subheader("🔍 Ürün Arama")
 c1, c2, c3, c4 = st.columns(4)
 
-list_b = sorted([str(x) for x in df_genel[HARF_ANA_KOD].dropna().unique() if str(x).strip() != ""])
-list_c = sorted([str(x) for x in df_genel[HARF_MULTI_KOD].dropna().unique() if str(x).strip() != ""])
-list_d = sorted([str(x) for x in df_genel[HARF_BARKOD].dropna().unique() if str(x).strip() != ""])
-list_g = sorted([str(x) for x in df_genel[HARF_TEDARIKCI].dropna().unique() if str(x).strip() != ""])
+list_b = sorted([str(x).strip() for x in df_genel[HARF_ANA_KOD].dropna().unique() if str(x).strip() not in ["", "nan"]])
+list_c = sorted([str(x).strip() for x in df_genel[HARF_MULTI_KOD].dropna().unique() if str(x).strip() not in ["", "nan"]])
+list_d = sorted([str(x).strip() for x in df_genel[HARF_BARKOD].dropna().unique() if str(x).strip() not in ["", "nan"]])
+list_g = sorted([str(x).strip() for x in df_genel[HARF_TEDARIKCI].dropna().unique() if str(x).strip() not in ["", "nan"]])
 
 with c1: sel_b = st.selectbox("Ürün Kodu", [""] + list_b, index=0)
 with c2: sel_c = st.selectbox("Multikod", [""] + list_c, index=0)
@@ -119,10 +125,10 @@ with c3: sel_d = st.selectbox("Barkod", [""] + list_d, index=0)
 with c4: sel_g = st.selectbox("Tedarikçi Kd", [""] + list_g, index=0)
 
 selected_row = None
-if sel_b: selected_row = df_genel[df_genel[HARF_ANA_KOD].astype(str) == sel_b]
-elif sel_c: selected_row = df_genel[df_genel[HARF_MULTI_KOD].astype(str) == sel_c]
-elif sel_d: selected_row = df_genel[df_genel[HARF_BARKOD].astype(str) == sel_d]
-elif sel_g: selected_row = df_genel[df_genel[HARF_TEDARIKCI].astype(str) == sel_g]
+if sel_b: selected_row = df_genel[df_genel[HARF_ANA_KOD].astype(str).str.strip() == sel_b]
+elif sel_c: selected_row = df_genel[df_genel[HARF_MULTI_KOD].astype(str).str.strip() == sel_c]
+elif sel_d: selected_row = df_genel[df_genel[HARF_BARKOD].astype(str).str.strip() == sel_d]
+elif sel_g: selected_row = df_genel[df_genel[HARF_TEDARIKCI].astype(str).str.strip() == sel_g]
 
 if selected_row is not None and not selected_row.empty:
     row = selected_row.iloc[0]
@@ -152,10 +158,11 @@ if selected_row is not None and not selected_row.empty:
     v_olcu_d = text_clean(row[HARF_OLCU_D]) or "--"
     v_olcu_cap = text_clean(row[HARF_OLCU_CAP]) or "--"
 
-    current_maliyet_raw = parse_float(v_maliyet)
-    current_kargo_raw = parse_float(v_kargo)
+    current_maliyet_raw = clean_float(v_maliyet)
+    current_kargo_raw = clean_float(v_kargo)
+    current_fiyat_raw = clean_float(v_fiyat)
 
-    # --- 2. ORTA PANEL: ÜRÜN BİLGİLERİ VE GÖRSEL ---
+    # --- BİLGİ VE GÖRSEL PANELİ ---
     col_left, col_right = st.columns([2, 1])
 
     with col_left:
@@ -187,7 +194,6 @@ if selected_row is not None and not selected_row.empty:
         r7_1.text_input("Stok:", v_stok, disabled=True)
         r7_2.text_input("Katalog:", v_katalog, disabled=True)
 
-        # 8. SATIR: ÜRÜN ÖLÇÜLERİ (H, W, D, Ø)
         st.caption("📐 Ürün Ölçüleri (H / W / D / Ø)")
         o1, o2, o3, o4 = st.columns(4)
         o1.text_input("H:", v_olcu_h, disabled=True)
@@ -197,29 +203,28 @@ if selected_row is not None and not selected_row.empty:
 
     with col_right:
         st.subheader("🖼️ Ürün Görseli")
-        # Google Drive Görsel Proxy Motoru
-        try:
-            img_url = f"https://lh3.googleusercontent.com/d/{DRIVE_FOLDER_ID}"
-            st.image(f"https://drive.google.com/thumbnail?id={DRIVE_FOLDER_ID}&sz=w1000", caption=f"{v_kod}.jpg", use_column_width=True)
-        except:
-            st.info("Görsel yüklenemedi veya klasörde bulunamadı.")
+        # Google Drive Arama & Görsel Bağlama Motoru
+        drive_embed_url = f"https://drive.google.com/embeddedfolderview?id={DRIVE_FOLDER_ID}#grid"
+        st.components.v1.iframe(drive_embed_url, height=320, scrolling=True)
+        st.caption(f"Klasördeki Dosya: **{v_kod}.jpg**")
 
     st.divider()
 
-    # --- 3. ALT SÜRÜCÜ: CANLI PAZARYERİ KÂR ANALİZ İSTASYONU ---
+    # --- ALT SÜRÜCÜ 1: CANLI PAZARYERİ KÂR ANALİZ İSTASYONU ---
     st.subheader("📊 Canlı Pazaryeri Kâr Analiz İstasyonu (KDV Hariç Net Kâr)")
     pk1, pk2 = st.columns([1, 2])
 
     with pk1:
         kom_oran = st.number_input("Komisyon (%)", value=20.4, step=0.1)
-        satis_fiyati_kdvli = st.number_input("Satış Fiyatı (KDV'li)", value=4295.0, step=10.0)
+        # Varsayılan satış fiyatını Excel'deki satış fiyatından çekiyoruz
+        satis_fiyati_kdvli = st.number_input("Satış Fiyatı (KDV'li)", value=float(current_fiyat_raw) if current_fiyat_raw > 0 else 4295.0, step=10.0)
         
         payda = (1.0 / 1.20) - (kom_oran / 120.0)
         if (current_maliyet_raw > 0 or current_kargo_raw > 0) and payda > 0:
             min_satis = (current_maliyet_raw + current_kargo_raw) / payda
-            st.markdown(f"**Min. Satış Fiyatı:** `{min_satis:.2f} TL`")
+            st.info(f"**Min. Satış Fiyatı:** {min_satis:.2f} TL")
         else:
-            st.markdown("**Min. Satış Fiyatı:** `0.00 TL`")
+            st.info("**Min. Satış Fiyatı:** 0.00 TL")
 
     with pk2:
         if satis_fiyati_kdvli > 0:
@@ -236,13 +241,13 @@ if selected_row is not None and not selected_row.empty:
 
     st.divider()
 
-    # --- 4. ALT SÜRÜCÜ: CANLI DESİ HESAPLA & KARGO FİRMA FİYATLARI ---
+    # --- ALT SÜRÜCÜ 2: CANLI DESİ & KARGO FİRMA FİYATLARI ---
     st.subheader("📦 Canlı Desi Hesapla & Kargo Firma Fiyatları")
     d1, d2, d3, d4 = st.columns(4)
     
-    init_en = parse_float(koli_w) if koli_w else 57.0
-    init_boy = parse_float(koli_l) if koli_l else 57.0
-    init_yuk = parse_float(koli_h) if koli_h else 35.0
+    init_en = clean_float(koli_w) if koli_w else 55.0
+    init_boy = clean_float(koli_l) if koli_l else 60.0
+    init_yuk = clean_float(koli_h) if koli_h else 60.0
 
     c_en = d1.number_input("En", value=init_en)
     c_boy = d2.number_input("Boy", value=init_boy)
@@ -254,10 +259,11 @@ if selected_row is not None and not selected_row.empty:
     if calc_desi > 0 and df_kargo is not None:
         desi_tam = math.ceil(calc_desi)
         try:
-            df_kargo_clean = df_kargo.iloc[1:].copy()
-            df_kargo_clean[KARGO_HARF_DESI] = df_kargo_clean[KARGO_HARF_DESI].apply(parse_float)
+            # KARGO sekmesini hatasız tarama engine
+            df_kargo_clean = df_kargo.copy()
+            df_kargo_clean["DESI_NUM"] = df_kargo_clean[KARGO_HARF_DESI].apply(clean_float)
             
-            mask_kargo = df_kargo_clean[KARGO_HARF_DESI] == float(desi_tam)
+            mask_kargo = df_kargo_clean["DESI_NUM"] == float(desi_tam)
             kargo_satir = df_kargo_clean[mask_kargo]
 
             if not kargo_satir.empty:
