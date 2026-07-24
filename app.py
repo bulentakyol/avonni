@@ -12,6 +12,8 @@ st.set_page_config(
 )
 
 SHEET_ID = "1F_kdWWEPL6GnlCzk3B9Ji1OoE-juZkCSZegyqbgFg1o"
+GENEL_GID = "1950984514"    # GENEL sekmesi
+KARGO_GID = "1504904732"    # "kargo ty" sekmesi (gerçek sekme adı KARGO değil)
 
 # --- STİL TANIMLAMALARI (MOBİL UYUMLU HALE GETİRİLDİ) ---
 st.markdown("""
@@ -111,6 +113,27 @@ st.markdown("""
             font-size: 15px !important;
         }
     }
+
+    /* ------------------------------------------------------------ */
+    /* SAYI GİRİŞ KUTULARINI (Komisyon, Satış Fiyatı, En/Boy/Yükseklik) */
+    /* diğer bilgi kartlarıyla AYNI görünüme getirme                  */
+    /* ------------------------------------------------------------ */
+    button[data-testid="stNumberInputStepUp"],
+    button[data-testid="stNumberInputStepDown"] {
+        display: none !important;
+    }
+    div[data-testid="stNumberInputContainer"] {
+        border-radius: 4px !important;
+        border: 1px solid #2c3e50 !important;
+        background-color: #f1f2f6 !important;
+    }
+    div[data-testid="stNumberInputContainer"] input {
+        background-color: #f1f2f6 !important;
+        color: #000000 !important;
+        -webkit-text-fill-color: #000000 !important;
+        font-weight: 800 !important;
+        padding: 6px 8px !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -201,8 +224,17 @@ def safe_str(val):
 # --- VERİ VE KARGO SÖZLÜĞÜ YÜKLEME ---
 @st.cache_data(ttl=30)
 def load_data():
-    url_genel = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=GENEL"
-    url_kargo = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=KARGO"
+    # NOT: Eskiden "gviz" uç noktası + sekme adı (sheet=GENEL) kullanılıyordu.
+    # Bunun iki sorunu vardı:
+    #  1) gviz her sütun için otomatik veri tipi tahmini yapıyor; Barkod/TY ID gibi
+    #     çoğunlukla sayısal görünen sütunlarda harf içeren değerler (örn. "AV-...",
+    #     "HRAVOAV13734E") bu tahmine uymadığı için boş dönüyordu.
+    #  2) Sekme adı tam eşleşmezse (örn. gerçek ad "kargo ty" iken kod "KARGO" arıyordu)
+    #     Google sessizce başka bir sekmeye düşüyor, hiç hata vermiyordu.
+    # "export?format=csv&gid=..." uç noktası sekme adına değil, sekmenin sabit gid
+    # numarasına dayanır ve hücreleri tip tahmini yapmadan ham metin olarak döker.
+    url_genel = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={GENEL_GID}"
+    url_kargo = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={KARGO_GID}"
 
     df_genel = pd.read_csv(url_genel, header=None, dtype=str)
     df_kargo = pd.read_csv(url_kargo, header=None, dtype=str)
