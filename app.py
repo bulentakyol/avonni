@@ -13,12 +13,11 @@ st.set_page_config(
 
 SHEET_ID = "1F_kdWWEPL6GnlCzk3B9Ji1OoE-juZkCSZegyqbgFg1o"
 
-# --- KESİN SİYAH YAZI, MOBİL İÇİN YAN YANA 2'Lİ GRID VE KOMPAKT TASARIM CSS ---
+# --- KESİN SİYAH YAZI VE STİL TANIMLAMALARI ---
 st.markdown("""
     <style>
     .stApp { background-color: #1e1e1e; color: #ffffff; }
     
-    /* Arama (Selectbox) ve Giriş Kutularının Yazı Rengi KESİNLİKLE SİYAH */
     div[data-baseweb="select"] * { 
         color: #000000 !important; 
         -webkit-text-fill-color: #000000 !important; 
@@ -36,34 +35,6 @@ st.markdown("""
     h1 { font-size: 20px !important; margin-bottom: 0px !important; padding-bottom: 2px !important; }
     h3 { font-size: 14px !important; margin-bottom: 0px !important; padding-bottom: 2px !important; color: #f1c40f !important; }
     
-    /* MOBİL VE MASAÜSTÜNDE YAN YANA GÖSTEREN 2'Lİ GRID KART YAPISI */
-    .details-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 5px;
-    }
-    
-    .info-card {
-        background-color: #f1f2f6;
-        border: 1px solid #2c3e50;
-        border-radius: 4px;
-        padding: 4px 6px;
-    }
-    .info-label {
-        color: #2980b9 !important;
-        font-size: 9px;
-        font-weight: bold;
-        text-transform: uppercase;
-        display: block;
-    }
-    .info-value {
-        color: #000000 !important;
-        font-size: 11px;
-        font-weight: 800;
-        word-break: break-all;
-    }
-
-    /* Arama Paneli Çerçevesi */
     .search-container {
         background-color: #141414;
         border: 1px solid #2c3e50;
@@ -72,7 +43,6 @@ st.markdown("""
         margin-bottom: 10px;
     }
 
-    /* %50 Büyütülmüş Tıklanabilir Görsel Alanı */
     .img-container {
         display: flex;
         justify-content: center;
@@ -133,7 +103,7 @@ KARGO_HARF_DHL = harf_to_indeks("C")
 KARGO_HARF_HJ = harf_to_indeks("D")
 KARGO_HARF_HJXL = harf_to_indeks("K")
 
-# --- YARDIMCI GÜÇLÜ FONKSİYONLAR ---
+# --- YARDIMCI FONKSİYONLAR ---
 def clean_float(val):
     if pd.isna(val) or val is None: return 0.0
     s = str(val).strip()
@@ -168,7 +138,7 @@ def format_money(val):
 def safe_str(val):
     if pd.isna(val) or val is None: return ""
     s = str(val).strip()
-    if s.lower() in ["nan", "none", "nat"]: return ""
+    if s.lower() in ["nan", "none", "nat", ""]: return ""
     if "." in s and not "http" in s:
         try:
             f = float(s)
@@ -180,7 +150,7 @@ def safe_str(val):
         s = s[:-2]
     return s
 
-# --- VERİ VE KARGO SÖZLÜĞÜ (DICTIONARY) YÜKLEME ---
+# --- VERİ VE KARGO SÖZLÜĞÜ YÜKLEME ---
 @st.cache_data(ttl=30)
 def load_data():
     url_genel = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=GENEL"
@@ -213,7 +183,7 @@ except Exception as e:
     st.error(f"Google Sheets erişim hatası: {e}")
     st.stop()
 
-# --- 1. BÖLÜM: AYRI ARAMA PANELİ ---
+# --- 1. BÖLÜM: ARAMA PANELİ ---
 st.markdown("<div class='search-container'>", unsafe_allow_html=True)
 st.markdown("<h3>🔍 Ürün Arama</h3>", unsafe_allow_html=True)
 
@@ -279,7 +249,7 @@ if selected_row is not None and not selected_row.empty:
     current_kargo_raw = clean_float(v_kargo)
     current_fiyat_raw = clean_float(v_fiyat)
 
-    # --- 2. BÖLÜM: SOLDA GÖRSEL, SAĞDA 2'Lİ SIKIŞTIRILMIŞ BİLGİ KARTLARI ---
+    # --- 2. BÖLÜM: GÖRSEL VE YAN YANA DETAYLAR (NATIVE STREAMLIT COMPONENTLER İLE) ---
     col_img, col_detay = st.columns([1, 1.5])
 
     with col_img:
@@ -299,40 +269,52 @@ if selected_row is not None and not selected_row.empty:
             """, unsafe_allow_html=True)
 
     with col_detay:
-        def render_card(label, val):
-            return f"""
-                <div class="info-card">
-                    <span class="info-label">{label}</span>
-                    <span class="info-value">{val}</span>
+        # HTML ETİKET HATASINI BİTİREN GÜVENLİ NATIVE STREAMLIT KART FONKSİYONU
+        def render_native_card(label, val):
+            st.markdown(f"""
+                <div style="background-color: #f1f2f6; border: 1px solid #2c3e50; border-radius: 4px; padding: 6px 8px; margin-bottom: 4px;">
+                    <span style="color: #2980b9; font-size: 10px; font-weight: bold; text-transform: uppercase; display: block;">{label}</span>
+                    <span style="color: #000000; font-size: 12px; font-weight: 800; word-break: break-all;">{val}</span>
                 </div>
-            """
+            """, unsafe_allow_html=True)
 
-        st.markdown(f"""
-            <div class="details-grid">
-                {render_card("Kod", v_kod)}
-                {render_card("Barkod", v_barkod)}
-                {render_card("TY ID", v_ty)}
-                {render_card("HB SKU", v_hb)}
-                {render_card("Ted Adı", v_ted_adi)}
-                {render_card("Ted Kd", v_ted_kd)}
-                {render_card("Fiyat", format_money(v_fiyat))}
-                {render_card("Kargo Fiyatı", format_money(v_kargo))}
-                {render_card("Maliyet", format_money(v_maliyet))}
-                {render_card("Termin", v_termin)}
-                {render_card("Koli Ölçüleri", v_koli)}
-                {render_card("Desi", v_desi)}
-                {render_card("Stok", v_stok)}
-                {render_card("Katalog", v_katalog)}
-                {render_card("H", v_olcu_h)}
-                {render_card("W", v_olcu_w)}
-                {render_card("D", v_olcu_d)}
-                {render_card("Ø", v_olcu_cap)}
-            </div>
-        """, unsafe_allow_html=True)
+        d1, d2 = st.columns(2)
+        with d1: render_native_card("Kod", v_kod)
+        with d2: render_native_card("Barkod", v_barkod)
+
+        d3, d4 = st.columns(2)
+        with d3: render_native_card("TY ID", v_ty)
+        with d4: render_native_card("HB SKU", v_hb)
+
+        d5, d6 = st.columns(2)
+        with d5: render_native_card("Ted Adı", v_ted_adi)
+        with d6: render_native_card("Ted Kd", v_ted_kd)
+
+        d7, d8 = st.columns(2)
+        with d7: render_native_card("Fiyat", format_money(v_fiyat))
+        with d8: render_native_card("Kargo Fiyatı", format_money(v_kargo))
+
+        d9, d10 = st.columns(2)
+        with d9: render_native_card("Maliyet", format_money(v_maliyet))
+        with d10: render_native_card("Termin", v_termin)
+
+        d11, d12 = st.columns(2)
+        with d11: render_native_card("Koli Ölçüleri", v_koli)
+        with d12: render_native_card("Desi", v_desi)
+
+        d13, d14 = st.columns(2)
+        with d13: render_native_card("Stok", v_stok)
+        with d14: render_native_card("Katalog", v_katalog)
+
+        o1, o2, o3, o4 = st.columns(4)
+        with o1: render_native_card("H", v_olcu_h)
+        with o2: render_native_card("W", v_olcu_w)
+        with o3: render_native_card("D", v_olcu_d)
+        with o4: render_native_card("Ø", v_olcu_cap)
 
     st.divider()
 
-    # --- 3. BÖLÜM: PY KÂR ANALİZ İSTASYONU & KARGO SÖZLÜK MOTORU ---
+    # --- 3. BÖLÜM: PY KÂR ANALİZ İSTASYONU ---
     st.markdown("<h3>📊 PY Kâr Analiz İstasyonu</h3>", unsafe_allow_html=True)
     pk1, pk2 = st.columns([1, 2])
 
@@ -383,7 +365,7 @@ if selected_row is not None and not selected_row.empty:
     calc_desi = (c_en * c_boy * c_yuk) / 3000.0 if (c_en > 0 and c_boy > 0 and c_yuk > 0) else 0.0
     d4.markdown(f"<p style='color:#7f8c8d; font-size:11px; font-weight:bold;'>Sonuç Desi</p><p style='color:#3498db; font-size:18px; font-weight:bold;'>{calc_desi:.2f}</p>", unsafe_allow_html=True)
 
-    # GÖMÜLÜ SÖZLÜK (DICTIONARY) İLE GARANTİLİ KARGO FİYAT ÇEKME MOTORU
+    # --- KARGO FİYATLARINI BASMA MOTORU ---
     if calc_desi > 0 and kargo_dict:
         desi_hedef = math.ceil(calc_desi)
         try:
