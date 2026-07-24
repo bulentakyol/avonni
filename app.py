@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import math
 
-# --- SAYFA YAPILANDIRMASI ---
+# --- SAYFA VE ARAYÜZ YAPILANDIRMASI ---
 st.set_page_config(
     page_title="Avonni 4'lü Arama ve Kâr Analiz İstasyonu",
     page_icon="💡",
@@ -14,22 +14,24 @@ st.set_page_config(
 SHEET_ID = "1F_kdWWEPL6GnlCzk3B9Ji1OoE-juZkCSZegyqbgFg1o"
 DRIVE_FOLDER_ID = "1meshrbBNQqyE0qXRbZ338ndBDnbDl56T"
 
+# Koyu Tema ve Modern Mobil Düzen CSS
 st.markdown("""
     <style>
-    .stApp { background-color: #0e1117; }
-    div[data-baseweb="input"] { background-color: #141414 !important; border-color: #2b2b2b !important; }
-    input { color: #ffffff !important; font-weight: bold; }
-    div[data-testid="stMetricValue"] { font-size: 18px !important; }
+    .stApp { background-color: #121212; color: #e0e0e0; }
+    div[data-baseweb="input"] { background-color: #1e1e1e !important; border-color: #2c3e50 !important; border-radius: 6px; }
+    input { color: #ffffff !important; font-weight: 600; }
+    div[data-testid="stMetricValue"] { font-size: 20px !important; font-weight: bold; }
+    .card-box { background-color: #1e1e1e; padding: 15px; border-radius: 8px; border: 1px solid #2c3e50; margin-bottom: 10px; }
     </style>
 """, unsafe_allow_html=True)
 
+# SÜTUN HARF TANIMLAMALARI (Masaüstü Mantığı Birebir)
 def harf_to_indeks(harf):
     indeks = 0
     for char in harf.upper():
         indeks = indeks * 26 + (ord(char) - ord('A') + 1)
     return indeks - 1
 
-# SÜTUN İNDEKSLERİ
 HARF_ANA_KOD = harf_to_indeks("B")
 HARF_MULTI_KOD = harf_to_indeks("C")
 HARF_BARKOD = harf_to_indeks("D")
@@ -59,7 +61,8 @@ KARGO_HARF_DHL = harf_to_indeks("C")
 KARGO_HARF_HJ = harf_to_indeks("D")
 KARGO_HARF_HJXL = harf_to_indeks("K")
 
-@st.cache_data(ttl=30)
+# --- VERİ MÖDÜLÜ ---
+@st.cache_data(ttl=60)
 def load_data():
     url_genel = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=GENEL"
     url_kargo = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=KARGO"
@@ -101,7 +104,7 @@ except Exception as e:
     st.error(f"Google Sheets erişim hatası: {e}")
     st.stop()
 
-# --- ARAMA PANELİ ---
+# --- 1. ÜST ARAMA PANELİ ---
 st.subheader("🔍 Ürün Arama")
 c1, c2, c3, c4 = st.columns(4)
 
@@ -152,7 +155,7 @@ if selected_row is not None and not selected_row.empty:
     current_maliyet_raw = parse_float(v_maliyet)
     current_kargo_raw = parse_float(v_kargo)
 
-    # --- PANEL İÇERİĞİ ---
+    # --- 2. ORTA PANEL: ÜRÜN BİLGİLERİ VE GÖRSEL ---
     col_left, col_right = st.columns([2, 1])
 
     with col_left:
@@ -184,6 +187,8 @@ if selected_row is not None and not selected_row.empty:
         r7_1.text_input("Stok:", v_stok, disabled=True)
         r7_2.text_input("Katalog:", v_katalog, disabled=True)
 
+        # 8. SATIR: ÜRÜN ÖLÇÜLERİ (H, W, D, Ø)
+        st.caption("📐 Ürün Ölçüleri (H / W / D / Ø)")
         o1, o2, o3, o4 = st.columns(4)
         o1.text_input("H:", v_olcu_h, disabled=True)
         o2.text_input("W:", v_olcu_w, disabled=True)
@@ -192,13 +197,16 @@ if selected_row is not None and not selected_row.empty:
 
     with col_right:
         st.subheader("🖼️ Ürün Görseli")
-        # Drive doğrudan görsel yükleme proxy
-        img_url = f"https://lh3.googleusercontent.com/d/{DRIVE_FOLDER_ID}"
-        st.image(f"https://drive.google.com/thumbnail?id={DRIVE_FOLDER_ID}&sz=w1000", caption=f"{v_kod}.jpg", use_column_width=True)
+        # Google Drive Görsel Proxy Motoru
+        try:
+            img_url = f"https://lh3.googleusercontent.com/d/{DRIVE_FOLDER_ID}"
+            st.image(f"https://drive.google.com/thumbnail?id={DRIVE_FOLDER_ID}&sz=w1000", caption=f"{v_kod}.jpg", use_column_width=True)
+        except:
+            st.info("Görsel yüklenemedi veya klasörde bulunamadı.")
 
     st.divider()
 
-    # --- ALT SÜRÜCÜ 1: CANLI PAZARYERİ KÂR ANALİZİ ---
+    # --- 3. ALT SÜRÜCÜ: CANLI PAZARYERİ KÂR ANALİZ İSTASYONU ---
     st.subheader("📊 Canlı Pazaryeri Kâr Analiz İstasyonu (KDV Hariç Net Kâr)")
     pk1, pk2 = st.columns([1, 2])
 
@@ -228,11 +236,10 @@ if selected_row is not None and not selected_row.empty:
 
     st.divider()
 
-    # --- ALT SÜRÜCÜ 2: CANLI DESİ & KARGO FİRMA FİYATLARI ---
+    # --- 4. ALT SÜRÜCÜ: CANLI DESİ HESAPLA & KARGO FİRMA FİYATLARI ---
     st.subheader("📦 Canlı Desi Hesapla & Kargo Firma Fiyatları")
     d1, d2, d3, d4 = st.columns(4)
     
-    # Otomatik koli boyutlarını getir
     init_en = parse_float(koli_w) if koli_w else 57.0
     init_boy = parse_float(koli_l) if koli_l else 57.0
     init_yuk = parse_float(koli_h) if koli_h else 35.0
@@ -247,7 +254,6 @@ if selected_row is not None and not selected_row.empty:
     if calc_desi > 0 and df_kargo is not None:
         desi_tam = math.ceil(calc_desi)
         try:
-            # KARGO sekmesi temizleme engine
             df_kargo_clean = df_kargo.iloc[1:].copy()
             df_kargo_clean[KARGO_HARF_DESI] = df_kargo_clean[KARGO_HARF_DESI].apply(parse_float)
             
@@ -260,9 +266,9 @@ if selected_row is not None and not selected_row.empty:
                 hjxl_val = kargo_satir.iloc[0][KARGO_HARF_HJXL]
 
                 kf1, kf2, kf3 = st.columns(3)
-                kf1.metric("DHL", format_money(dhl_val))
-                kf2.metric("HJ", format_money(hj_val))
-                kf3.metric("HJXL", format_money(hjxl_val))
+                kf1.metric("DHL Fiyatı", format_money(dhl_val))
+                kf2.metric("HJ Fiyatı", format_money(hj_val))
+                kf3.metric("HJXL Fiyatı", format_money(hjxl_val))
             else:
                 st.warning(f"{desi_tam} desi için kargo tablosunda fiyat bulunamadı.")
         except Exception as ex:
