@@ -5,49 +5,57 @@ import re
 
 # --- SAYFA YAPILANDIRMASI ---
 st.set_page_config(
-    page_title="Avonni 4'lü Arama ve Kâr Analiz İstasyonu",
+    page_title="Avonni Ürün Analiz",
     page_icon="💡",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# --- GOOGLE SHEETS & AYARLAR ---
+# --- GOOGLE SHEETS ADRESİ ---
 SHEET_ID = "1F_kdWWEPL6GnlCzk3B9Ji1OoE-juZkCSZegyqbgFg1o"
-# Resimleri kendi sitenize/github dizininize yüklediyseniz base URL (Örnek: https://avonni.com/images/)
-BASE_IMAGE_URL = "https://raw.githubusercontent.com/bulentakyol/avonni/main/images/" 
 
-# --- ARAYÜZ VE CSS RENK KONTRAST DÜZELTMELERİ ---
+# 1. CSS İLE KESİN SİYAH YAZI, VİZON/KOYU ARKA PLAN VE KÜÇÜLTÜLMÜŞ BAŞLIKLAR
 st.markdown("""
     <style>
-    .stApp { background-color: #1a1a1a; color: #ffffff; }
+    /* Genel Arka Plan */
+    .stApp { background-color: #1e1e1e; color: #ffffff; }
     
-    /* Arama kutularını koyu gri ve yazıları parlak beyaz yap */
+    /* Girdi Kutularının (Aktif/Pasif) Yazı Rengi KESİNLİKLE SİYAH */
     div[data-baseweb="input"] { 
-        background-color: #2c2f33 !important; 
-        border: 1px solid #4a5568 !important; 
+        background-color: #f1f2f6 !important; 
+        border: 1px solid #2c3e50 !important; 
         border-radius: 4px; 
     }
-    input { 
-        color: #ffffff !important; 
-        font-weight: 700 !important; 
-        -webkit-text-fill-color: #ffffff !important; 
-    }
-    /* Pasif (Disabled) kutular - Bilgi Paneli */
-    div[data-baseweb="input"]:has(input:disabled) {
-        background-color: #23272a !important;
-        border: 1px solid #2d3748 !important;
-    }
-    input:disabled {
-        color: #cbd5e0 !important; /* Açık gri yazılar */
-        -webkit-text-fill-color: #cbd5e0 !important;
+    input, input:disabled, input::placeholder, textarea:disabled { 
+        color: #000000 !important; 
+        font-weight: 800 !important; 
+        -webkit-text-fill-color: #000000 !important; 
+        opacity: 1 !important;
     }
     
-    label { color: #63b3ed !important; font-size: 11px !important; font-weight: bold !important; }
-    div[data-testid="stMetricValue"] { font-size: 22px !important; font-weight: bold; }
+    /* Etiketler (Label) ve Metrikler */
+    label { color: #3498db !important; font-size: 11px !important; font-weight: bold !important; }
+    div[data-testid="stMetricValue"] { font-size: 20px !important; font-weight: bold; }
+    
+    /* Başlık Fontlarını Küçültme (Mobil İçin Daraltma) */
+    h1 { font-size: 24px !important; margin-bottom: 0px !important; padding-bottom: 5px !important; }
+    h3 { font-size: 16px !important; margin-bottom: 0px !important; padding-bottom: 5px !important; color: #f1c40f !important; }
+    
+    /* Görsel kapsayıcı ayarı (180x270 orijinal masaüstü oranına yakın) */
+    .img-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background-color: #141414;
+        padding: 5px;
+        border: 1px solid #2c3e50;
+        border-radius: 5px;
+        max-width: 250px; /* Maksimum genişlik kısıtlaması */
+    }
     </style>
 """, unsafe_allow_html=True)
 
-# SÜTUN HARF TANIMLAMALARI (Masaüstü Mantığı Birebir)
+# SÜTUN İNDEKSLERİ
 def harf_to_indeks(harf):
     indeks = 0
     for char in harf.upper():
@@ -77,14 +85,14 @@ HARF_OLCU_H = harf_to_indeks("AG")
 HARF_OLCU_W = harf_to_indeks("AH")
 HARF_OLCU_D = harf_to_indeks("AI")
 HARF_OLCU_CAP = harf_to_indeks("AJ")
-HARF_GORSEL_LINK = harf_to_indeks("BH") # Görsel linki BH sütununa eklendi
+HARF_GORSEL_LINK = harf_to_indeks("BH")  # Görselin URL Linki (Kökten Çözüm)
 
 KARGO_HARF_DESI = harf_to_indeks("A")
 KARGO_HARF_DHL = harf_to_indeks("C")
 KARGO_HARF_HJ = harf_to_indeks("D")
 KARGO_HARF_HJXL = harf_to_indeks("K")
 
-# --- HASSAS SAYI DÖNÜŞTÜRÜCÜ ---
+# --- HASSAS SAYI ÇEVİRİCİ ---
 def clean_float(val):
     if pd.isna(val) or val is None: return 0.0
     s = str(val).strip()
@@ -101,7 +109,7 @@ def clean_float(val):
         if len(parts) == 2 and len(parts[1]) == 3:
             s = s.replace(".", "")
     try:
-        return float(s)
+        return float(s) * 1.0  # Numerik Garanti (x1 Çarpımı)
     except:
         return 0.0
 
@@ -131,7 +139,7 @@ def load_data():
     df_kargo = pd.read_csv(url_kargo, header=None, skiprows=1, dtype=str)
     return df_genel, df_kargo
 
-st.title("💡 Avonni 4'lü Arama ve Kâr Analiz İstasyonu")
+st.markdown("<h1>💡 Avonni Ürün Analiz</h1>", unsafe_allow_html=True)
 
 try:
     df_genel, df_kargo = load_data()
@@ -139,8 +147,8 @@ except Exception as e:
     st.error(f"Google Sheets erişim hatası: {e}")
     st.stop()
 
-# --- ÜST PANEL: ARAMA ---
-st.subheader("🔍 Ürün Arama")
+# --- ÜST ARAMA PANELİ ---
+st.markdown("<h3>🔍 Ürün Arama</h3>", unsafe_allow_html=True)
 c1, c2, c3, c4 = st.columns(4)
 
 list_b = sorted([str(x).strip() for x in df_genel[HARF_ANA_KOD].dropna().unique() if str(x).strip() not in ["", "nan"]])
@@ -175,6 +183,8 @@ if selected_row is not None and not selected_row.empty:
     v_termin = text_clean(row[HARF_TERMIN])
     v_stok = text_clean(row[HARF_STOK])
     v_katalog = "X" if "X" in str(row[HARF_KATALOG]).upper() else ""
+    
+    v_gorsel_link = text_clean(row[HARF_GORSEL_LINK])
 
     koli_l = text_clean(row[HARF_KOLI_L])
     koli_w = text_clean(row[HARF_KOLI_W])
@@ -186,12 +196,6 @@ if selected_row is not None and not selected_row.empty:
     v_olcu_w = text_clean(row[HARF_OLCU_W]) or "--"
     v_olcu_d = text_clean(row[HARF_OLCU_D]) or "--"
     v_olcu_cap = text_clean(row[HARF_OLCU_CAP]) or "--"
-    
-    # BH Sütunundan Görsel Linkini Çek
-    try:
-        v_gorsel_link = text_clean(row[HARF_GORSEL_LINK])
-    except:
-        v_gorsel_link = ""
 
     current_maliyet_raw = clean_float(v_maliyet)
     current_kargo_raw = clean_float(v_kargo)
@@ -237,22 +241,27 @@ if selected_row is not None and not selected_row.empty:
         o4.text_input("Ø:", v_olcu_cap, disabled=True)
 
     with col_right:
-        st.subheader("🖼️ Ürün Görseli")
-        # GÖRSEL MOTORU: Önce BH Sütunu Linkine Bakar, yoksa Varsayılan Klasör URL'sine bakar
-        if v_gorsel_link and v_gorsel_link.startswith("http"):
-            final_img_url = v_gorsel_link
+        # GÖRSEL BAŞLIĞI VE İKONU KALDIRILDI
+        # TIKLANDIĞINDA YENİ PENCEREDE AÇILAN KISITLI BOYUTTAKİ HTML GÖRSEL YAPISI
+        if v_gorsel_link.startswith("http"):
+            st.markdown(f"""
+                <div class="img-container">
+                    <a href="{v_gorsel_link}" target="_blank">
+                        <img src="{v_gorsel_link}" style="max-height: 270px; max-width: 100%; border-radius: 4px; object-fit: contain;">
+                    </a>
+                </div>
+            """, unsafe_allow_html=True)
         else:
-            final_img_url = f"{BASE_IMAGE_URL}{v_kod}.jpg"
-            
-        try:
-            st.image(final_img_url, caption=f"Kod: {v_kod}", use_column_width=True)
-        except:
-            st.info(f"Görsel bulunamadı: {final_img_url}")
+            st.markdown("""
+                <div class="img-container" style="height: 270px;">
+                    <p style="color: #7f8c8d; font-weight: bold;">Görsel Bulunamadı</p>
+                </div>
+            """, unsafe_allow_html=True)
 
     st.divider()
 
-    # --- ALT SÜRÜCÜ 1: CANLI PAZARYERİ KÂR ANALİZ İSTASYONU ---
-    st.subheader("📊 Canlı Pazaryeri Kâr Analiz İstasyonu (KDV Hariç Net Kâr)")
+    # --- ALT SÜRÜCÜ 1: PY KÂR ANALİZ İSTASYONU ---
+    st.markdown("<h3>📊 PY Kâr Analiz İstasyonu</h3>", unsafe_allow_html=True)
     pk1, pk2 = st.columns([1, 2])
 
     with pk1:
@@ -262,9 +271,9 @@ if selected_row is not None and not selected_row.empty:
         payda = (1.0 / 1.20) - (kom_oran / 120.0)
         if (current_maliyet_raw > 0 or current_kargo_raw > 0) and payda > 0:
             min_satis = (current_maliyet_raw + current_kargo_raw) / payda
-            st.markdown(f"**Min. Satış Fiyatı:** <span style='color:#63b3ed; font-size:18px; font-weight:bold;'>{min_satis:.2f} TL</span>", unsafe_allow_html=True)
+            st.markdown(f"**Min. Satış Fiyatı:** <span style='color:#3498db; font-size:16px; font-weight:bold;'>{min_satis:.2f} TL</span>", unsafe_allow_html=True)
         else:
-            st.markdown("**Min. Satış Fiyatı:** <span style='color:#63b3ed; font-size:18px; font-weight:bold;'>0.00 TL</span>", unsafe_allow_html=True)
+            st.markdown("**Min. Satış Fiyatı:** <span style='color:#3498db; font-size:16px; font-weight:bold;'>0.00 TL</span>", unsafe_allow_html=True)
 
     with pk2:
         if satis_fiyati_kdvli > 0:
@@ -274,24 +283,22 @@ if selected_row is not None and not selected_row.empty:
             toplam_gider_kdv_haric = current_maliyet_raw + current_kargo_raw + kom_kesintisi_net
             net_kar_kdv_haric = satis_kdv_haric - toplam_gider_kdv_haric
 
-            # OKUNABİLİR RENKLİ ÖZEL HTML KUTULARI (st.metric yerine)
             m1, m2, m3 = st.columns(3)
-            m1.markdown(f"<div style='background-color:#23272a; padding:10px; border-radius:5px; border-left:4px solid #e67e22;'><p style='color:#a0aec0; margin:0; font-size:12px;'>PY Kom. Gideri (KDV'siz)</p><p style='color:#e67e22; margin:0; font-size:22px; font-weight:bold;'>{format_money(kom_kesintisi_net)}</p></div>", unsafe_allow_html=True)
-            
-            m2.markdown(f"<div style='background-color:#23272a; padding:10px; border-radius:5px; border-left:4px solid #e74c3c;'><p style='color:#a0aec0; margin:0; font-size:12px;'>Maliyet+Kargo+Kom(Net)</p><p style='color:#e74c3c; margin:0; font-size:22px; font-weight:bold;'>{format_money(toplam_gider_kdv_haric)}</p></div>", unsafe_allow_html=True)
+            m1.markdown(f"<p style='color:#7f8c8d; font-size:12px; font-weight:bold;'>PY Kom. Gideri (KDV'siz)</p><p style='color:#e67e22; font-size:18px; font-weight:bold;'>{format_money(kom_kesintisi_net)}</p>", unsafe_allow_html=True)
+            m2.markdown(f"<p style='color:#7f8c8d; font-size:12px; font-weight:bold;'>Maliyet+Kargo+Kom(Net)</p><p style='color:#e74c3c; font-size:18px; font-weight:bold;'>{format_money(toplam_gider_kdv_haric)}</p>", unsafe_allow_html=True)
             
             kar_renk = "#e74c3c" if net_kar_kdv_haric < 0 else "#2ecc71"
-            m3.markdown(f"<div style='background-color:#23272a; padding:10px; border-radius:5px; border-left:4px solid {kar_renk};'><p style='color:{kar_renk}; margin:0; font-size:12px;'>Net Kâr (KDV Hariç)</p><p style='color:{kar_renk}; margin:0; font-size:24px; font-weight:bold;'>{format_money(net_kar_kdv_haric)}</p></div>", unsafe_allow_html=True)
+            m3.markdown(f"<p style='color:{kar_renk}; font-size:12px; font-weight:bold;'>Net Kâr (KDV Hariç)</p><p style='color:{kar_renk}; font-size:20px; font-weight:bold;'>{format_money(net_kar_kdv_haric)}</p>", unsafe_allow_html=True)
         else:
             m1, m2, m3 = st.columns(3)
-            m1.markdown("<div style='background-color:#23272a; padding:10px; border-radius:5px;'><p style='color:#a0aec0; margin:0;'>PY Kom. Gideri (KDV'siz)</p><p style='color:#e67e22; margin:0; font-size:22px; font-weight:bold;'>-- TL</p></div>", unsafe_allow_html=True)
-            m2.markdown("<div style='background-color:#23272a; padding:10px; border-radius:5px;'><p style='color:#a0aec0; margin:0;'>Maliyet+Kargo+Kom(Net)</p><p style='color:#e74c3c; margin:0; font-size:22px; font-weight:bold;'>-- TL</p></div>", unsafe_allow_html=True)
-            m3.markdown("<div style='background-color:#23272a; padding:10px; border-radius:5px;'><p style='color:#a0aec0; margin:0;'>Net Kâr (KDV Hariç)</p><p style='color:#2ecc71; margin:0; font-size:22px; font-weight:bold;'>-- TL</p></div>", unsafe_allow_html=True)
+            m1.markdown(f"<p style='color:#7f8c8d; font-size:12px; font-weight:bold;'>PY Kom. Gideri (KDV'siz)</p><p style='color:#e67e22; font-size:18px; font-weight:bold;'>-- TL</p>", unsafe_allow_html=True)
+            m2.markdown(f"<p style='color:#7f8c8d; font-size:12px; font-weight:bold;'>Maliyet+Kargo+Kom(Net)</p><p style='color:#e74c3c; font-size:18px; font-weight:bold;'>-- TL</p>", unsafe_allow_html=True)
+            m3.markdown(f"<p style='color:#2ecc71; font-size:12px; font-weight:bold;'>Net Kâr (KDV Hariç)</p><p style='color:#2ecc71; font-size:20px; font-weight:bold;'>-- TL</p>", unsafe_allow_html=True)
 
     st.divider()
 
     # --- ALT SÜRÜCÜ 2: CANLI DESİ HESAPLA & KARGO FİRMA FİYATLARI ---
-    st.subheader("📦 Canlı Desi Hesapla & Kargo Firma Fiyatları")
+    st.markdown("<h3>📦 Canlı Desi & Kargo Fiyatları</h3>", unsafe_allow_html=True)
     d1, d2, d3, d4 = st.columns(4)
     
     init_en = clean_float(koli_w) if koli_w else 0.0
@@ -303,21 +310,18 @@ if selected_row is not None and not selected_row.empty:
     c_yuk = d3.number_input("Yükseklik", value=init_yuk)
 
     calc_desi = (c_en * c_boy * c_yuk) / 3000.0 if (c_en > 0 and c_boy > 0 and c_yuk > 0) else 0.0
-    
-    # Desi Sonucunu da kutu içinde göster
-    d4.markdown(f"<div style='background-color:#23272a; padding:10px; border-radius:5px; border-left:4px solid #3498db;'><p style='color:#a0aec0; margin:0; font-size:12px;'>Sonuç Desi</p><p style='color:#3498db; margin:0; font-size:24px; font-weight:bold;'>{calc_desi:.2f}</p></div>", unsafe_allow_html=True)
+    d4.markdown(f"<p style='color:#7f8c8d; font-size:12px; font-weight:bold;'>Sonuç Desi</p><p style='color:#3498db; font-size:20px; font-weight:bold;'>{calc_desi:.2f}</p>", unsafe_allow_html=True)
 
-    st.write("") # Boşluk
-    
-    # KARGO EŞLEŞTİRME (MASAÜSTÜ KODU BİREBİR GARANTİLİ)
+    # 1 İLE ÇARPIM NUMERİK GARANTİLİ KARGO EŞLEŞTİRME MOTORU
     if calc_desi > 0 and df_kargo is not None:
-        desi_tam = math.ceil(calc_desi)
+        desi_tam = math.ceil(calc_desi) * 1.0  # Desi sonucunu kesin Float Sayıya Dönüştürme
         try:
             df_kargo_clean = df_kargo.copy()
-            # Masaüstü kodu mantığı: A sütununu zorla sayı yap ve == ile eşleştir
-            df_kargo_clean["DESI_NUM"] = pd.to_numeric(df_kargo_clean[KARGO_HARF_DESI], errors='coerce')
+            # Tablodan gelen string veriyi önce float yapıp, sonra garantilemek için 1 ile çarpıyoruz
+            df_kargo_clean["DESI_NUM"] = df_kargo_clean[KARGO_HARF_DESI].apply(lambda x: clean_float(x) * 1.0)
             
-            mask_kargo = df_kargo_clean["DESI_NUM"] == float(desi_tam)
+            # Tam eşitlik kontrolü (39.0 == 39.0 vb.)
+            mask_kargo = df_kargo_clean["DESI_NUM"] == desi_tam
             kargo_satir = df_kargo_clean[mask_kargo]
 
             if not kargo_satir.empty:
@@ -326,11 +330,11 @@ if selected_row is not None and not selected_row.empty:
                 hjxl_val = kargo_satir.iloc[0][KARGO_HARF_HJXL]
 
                 kf1, kf2, kf3 = st.columns(3)
-                kf1.markdown(f"<div style='background-color:#23272a; padding:10px; border-radius:5px; border-bottom:3px solid #e67e22;'><p style='color:#a0aec0; margin:0; font-size:12px;'>DHL Fiyatı</p><p style='color:#e67e22; margin:0; font-size:22px; font-weight:bold;'>{format_money(dhl_val)}</p></div>", unsafe_allow_html=True)
-                kf2.markdown(f"<div style='background-color:#23272a; padding:10px; border-radius:5px; border-bottom:3px solid #9b59b6;'><p style='color:#a0aec0; margin:0; font-size:12px;'>HJ Fiyatı</p><p style='color:#9b59b6; margin:0; font-size:22px; font-weight:bold;'>{format_money(hj_val)}</p></div>", unsafe_allow_html=True)
-                kf3.markdown(f"<div style='background-color:#23272a; padding:10px; border-radius:5px; border-bottom:3px solid #e74c3c;'><p style='color:#a0aec0; margin:0; font-size:12px;'>HJXL Fiyatı</p><p style='color:#e74c3c; margin:0; font-size:22px; font-weight:bold;'>{format_money(hjxl_val)}</p></div>", unsafe_allow_html=True)
+                kf1.markdown(f"<p style='color:#7f8c8d; font-size:12px; font-weight:bold;'>DHL:</p><p style='color:#e67e22; font-size:18px; font-weight:bold;'>{format_money(dhl_val)}</p>", unsafe_allow_html=True)
+                kf2.markdown(f"<p style='color:#7f8c8d; font-size:12px; font-weight:bold;'>HJ:</p><p style='color:#9b59b6; font-size:18px; font-weight:bold;'>{format_money(hj_val)}</p>", unsafe_allow_html=True)
+                kf3.markdown(f"<p style='color:#7f8c8d; font-size:12px; font-weight:bold;'>HJXL:</p><p style='color:#e74c3c; font-size:18px; font-weight:bold;'>{format_money(hjxl_val)}</p>", unsafe_allow_html=True)
             else:
-                st.warning(f"⚠️ {desi_tam} desi için KARGO sekmesinde net bir fiyat eşleşmesi bulunamadı.")
+                st.warning(f"{int(desi_tam)} desi için kargo tablosunda fiyat bulunamadı.")
         except Exception as ex:
             st.error(f"Kargo tablosu okunurken hata: {ex}")
 else:
