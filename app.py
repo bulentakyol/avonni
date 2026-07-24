@@ -10,10 +10,10 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- GOOGLE SHEETS & DRIVE ADRESLERİ ---
+# --- GOOGLE SHEETS ADRESİ ---
 SHEET_ID = "1F_kdWWEPL6GnlCzk3B9Ji1OoE-juZkCSZegyqbgFg1o"
 
-# CSS İLE MASAÜSTÜ NİZAMI VE SIKIŞTIRILMIŞ TASARIM
+# CSS İLE KOYU TEMA DÜZENLEMESİ (Sözdizimi Hatası Düzeltildi)
 st.markdown("""
     <style>
     .stApp { background-color: #0e1117; }
@@ -21,9 +21,9 @@ st.markdown("""
     input { color: #ffffff !important; font-weight: bold; }
     div[data-testid="stMetricValue"] { font-size: 18px !important; }
     </style>
-""", unsafe_allow_keywords=True)
+""", unsafe_allow_html=True)
 
-# SÜTUN HARF TANIMLAMALARI
+# SÜTUN HARF TANIMLAMALARI (Masaüstü Mantığı Birebir)
 def harf_to_indeks(harf):
     indeks = 0
     for char in harf.upper():
@@ -59,7 +59,7 @@ KARGO_HARF_DHL = harf_to_indeks("C")
 KARGO_HARF_HJ = harf_to_indeks("D")
 KARGO_HARF_HJXL = harf_to_indeks("K")
 
-# --- VERİ MÖDÜLÜ ---
+# --- VERİ YÜKLEME ---
 @st.cache_data(ttl=60)
 def load_data():
     url_genel = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=GENEL"
@@ -71,7 +71,7 @@ def load_data():
 
 def format_money(val):
     try:
-        if pd.isna(val) or str(val).strip() == "": return "-- TL"
+        if pd.isna(val) or str(val).strip() == "" or str(val).strip() == "--": return "-- TL"
         num = float(str(val).replace(".", "").replace(",", "."))
         if num.is_integer():
             return f"{int(num):,}".replace(",", ".") + " TL"
@@ -92,10 +92,10 @@ st.title("💡 Avonni 4'lü Arama ve Kâr Analiz İstasyonu")
 try:
     df_genel, df_kargo = load_data()
 except Exception as e:
-    st.error(f"Veri yüklenemedi. İnternet/Sheets izinlerini kontrol edin: {e}")
+    st.error(f"Veri yüklenemedi. Google Sheets erişim ayarlarını kontrol edin: {e}")
     st.stop()
 
-# --- 1. ÜST ARAMA PANELİ (4 KUTU - AÇILIR LİSTELİ) ---
+# --- 1. ÜST ARAMA PANELİ (4 KUTU) ---
 st.subheader("🔍 Ürün Arama")
 c1, c2, c3, c4 = st.columns(4)
 
@@ -198,7 +198,8 @@ if selected_row is not None and not selected_row.empty:
         o4.text_input("Ø:", v_olcu_cap, disabled=True)
 
     with col_right:
-        # GOOGLE DRIVE GÖRSEL ÇEKİCİ
+        # Görsel Alanı
+        st.subheader("🖼️ Ürün Görseli")
         img_url = f"https://drive.google.com/thumbnail?id=1meshrbBNQqyE0qXRbZ338ndBDnbDl56T&sz=w1000"
         st.image(img_url, caption=f"{v_kod}.jpg", use_column_width=True)
 
@@ -248,8 +249,7 @@ if selected_row is not None and not selected_row.empty:
     if calc_desi > 0 and df_kargo is not None:
         desi_tam = math.ceil(calc_desi)
         try:
-            # KARGO sekmesinde A sütunu desi, C=DHL, D=HJ, K=HJXL
-            df_kargo_clean = df_kargo.iloc[1:].copy() # İlk satır başlık olduğu için kesiyoruz
+            df_kargo_clean = df_kargo.iloc[1:].copy()
             df_kargo_clean[KARGO_HARF_DESI] = pd.to_numeric(df_kargo_clean[KARGO_HARF_DESI], errors='coerce')
             
             mask_kargo = df_kargo_clean[KARGO_HARF_DESI] == float(desi_tam)
