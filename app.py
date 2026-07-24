@@ -3,7 +3,7 @@ import pandas as pd
 import math
 
 # --- SAYFA VE ARAYÜZ YAPILANDIRMASI ---
-st.set_page_page_config(
+st.set_page_config(
     page_title="Avonni Stok & Kâr İstasyonu",
     page_icon="💡",
     layout="wide",
