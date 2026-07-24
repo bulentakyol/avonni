@@ -3,7 +3,7 @@ import pandas as pd
 import math
 import re
 
-# --- SAYFA VE ARAYÜZ YAPILANDIRMASI ---
+# --- SAYFA YAPILANDIRMASI ---
 st.set_page_config(
     page_title="Avonni Ürün Analiz",
     page_icon="💡",
@@ -13,19 +13,17 @@ st.set_page_config(
 
 SHEET_ID = "1F_kdWWEPL6GnlCzk3B9Ji1OoE-juZkCSZegyqbgFg1o"
 
-# --- KESİN SİYAH YAZI, KÜÇÜK BAŞLIKLAR VE GÖRSEL CSS ---
+# --- KESİN SİYAH YAZI, HTML BİLGİ KARTLARI VE MOBİL KOMPAKT TASARIM CSS ---
 st.markdown("""
     <style>
     .stApp { background-color: #1e1e1e; color: #ffffff; }
     
-    /* Girdi kutularının arka planı */
+    /* Arama kutuları ve sayısal inputlar için giriş alanları */
     div[data-baseweb="input"] { 
         background-color: #f1f2f6 !important; 
         border: 1px solid #2c3e50 !important; 
         border-radius: 4px; 
     }
-    
-    /* KUTULARIN İÇİNDEKİ YAZILARI KESİNLİKLE SİYAH YAPAN KOD */
     div[data-baseweb="input"] * { 
         color: #000000 !important; 
         -webkit-text-fill-color: #000000 !important; 
@@ -34,13 +32,43 @@ st.markdown("""
     }
     
     label { color: #3498db !important; font-size: 11px !important; font-weight: bold !important; }
-    div[data-testid="stMetricValue"] { font-size: 18px !important; font-weight: bold; }
+    div[data-testid="stMetricValue"] { font-size: 16px !important; font-weight: bold; }
     
-    /* Başlık Fontlarını Küçültme */
-    h1 { font-size: 22px !important; margin-bottom: 0px !important; padding-bottom: 5px !important; }
-    h3 { font-size: 15px !important; margin-bottom: 0px !important; padding-bottom: 5px !important; color: #f1c40f !important; }
+    h1 { font-size: 20px !important; margin-bottom: 0px !important; padding-bottom: 2px !important; }
+    h3 { font-size: 14px !important; margin-bottom: 0px !important; padding-bottom: 2px !important; color: #f1c40f !important; }
     
-    /* Görsel kapsayıcı ayarı (Önceki halinin %50 büyütülmüş hali) */
+    /* KESİN SİYAH YAZILI ÖZEL HTML BİLGİ KARTI (Disabled input grileşmesini önler) */
+    .info-card {
+        background-color: #f1f2f6;
+        border: 1px solid #2c3e50;
+        border-radius: 4px;
+        padding: 5px 8px;
+        margin-bottom: 3px;
+    }
+    .info-label {
+        color: #2980b9 !important;
+        font-size: 10px;
+        font-weight: bold;
+        text-transform: uppercase;
+        display: block;
+        margin-bottom: 1px;
+    }
+    .info-value {
+        color: #000000 !important;
+        font-size: 12px;
+        font-weight: 800;
+    }
+
+    /* Arama Paneli Çerçevesi */
+    .search-container {
+        background-color: #141414;
+        border: 1px solid #2c3e50;
+        border-radius: 6px;
+        padding: 10px;
+        margin-bottom: 10px;
+    }
+
+    /* %50 Büyütülmüş Görsel Alanı */
     .img-container {
         display: flex;
         justify-content: center;
@@ -49,14 +77,15 @@ st.markdown("""
         padding: 5px;
         border: 1px solid #2c3e50;
         border-radius: 5px;
-        max-width: 270px;
-        max-height: 405px;
+        max-width: 350px;
+        max-height: 520px;
         overflow: hidden;
+        margin: 0 auto;
     }
     .img-container img {
         width: 100%;
         height: auto;
-        max-height: 400px;
+        max-height: 500px;
         object-fit: contain;
         cursor: pointer;
     }
@@ -100,7 +129,7 @@ KARGO_HARF_DHL = harf_to_indeks("C")
 KARGO_HARF_HJ = harf_to_indeks("D")
 KARGO_HARF_HJXL = harf_to_indeks("K")
 
-# --- GÜÇLENDİRİLMİŞ SAYI VE METİN ÇEVİRİCİLER ---
+# --- YARDIMCI FONKSİYONLAR ---
 def clean_float(val):
     if pd.isna(val) or val is None: return 0.0
     s = str(val).strip()
@@ -117,7 +146,7 @@ def clean_float(val):
         if len(parts) == 2 and len(parts[1]) == 3:
             s = s.replace(".", "")
     try:
-        return float(s) * 1.0  # GARANTİLİ 1.0 ÇARPIMI
+        return float(s) * 1.0
     except:
         return 0.0
 
@@ -135,30 +164,44 @@ def format_money(val):
 def safe_str(val):
     if pd.isna(val) or val is None: return ""
     s = str(val).strip()
-    if s.endswith(".0"): s = s[:-2]  # Bilimsel veya .0 uzantılı barkodları temizle
+    if s.endswith(".0"): s = s[:-2]
     if s.lower() == "nan": return ""
     return s
 
-# --- VERİ YÜKLEME ---
+# --- VERİ VE KARGO SÖZLÜĞÜ (DICTIONARY) YÜKLEME ---
 @st.cache_data(ttl=30)
 def load_data():
     url_genel = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=GENEL"
     url_kargo = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=KARGO"
     
     df_genel = pd.read_csv(url_genel, header=None, dtype=str)
-    # skiprows KALDIRILDI! Tüm veriler çekiliyor, sayı kontrolü kendi içinde halledilecek.
     df_kargo = pd.read_csv(url_kargo, header=None, dtype=str)
-    return df_genel, df_kargo
+    
+    # Kargo verilerini hata olmasın diye Python Sözlüğüne (Dictionary) çeviriyoruz
+    kargo_dict = {}
+    for idx, row in df_kargo.iterrows():
+        desi_val = clean_float(row[KARGO_HARF_DESI])
+        if desi_val > 0:
+            kargo_dict[int(desi_val)] = {
+                'DHL': row[KARGO_HARF_DHL],
+                'HJ': row[KARGO_HARF_HJ],
+                'HJXL': row[KARGO_HARF_HJXL]
+            }
+            
+    return df_genel, kargo_dict
 
 st.markdown("<h1>💡 Avonni Ürün Analiz</h1>", unsafe_allow_html=True)
 
 try:
-    df_genel, df_kargo = load_data()
+    df_genel, kargo_dict = load_data()
 except Exception as e:
     st.error(f"Google Sheets erişim hatası: {e}")
     st.stop()
 
-# --- ARAMA KUTULARINI SİLME (SESSION STATE) MANTIĞI ---
+# --- 1. BÖLÜM: AYRI ARAMA PANELİ ---
+st.markdown("<div class='search-container'>", unsafe_allow_html=True)
+st.markdown("<h3>🔍 Ürün Arama</h3>", unsafe_allow_html=True)
+
 if 'sel_b' not in st.session_state: st.session_state.sel_b = ""
 if 'sel_c' not in st.session_state: st.session_state.sel_c = ""
 if 'sel_d' not in st.session_state: st.session_state.sel_d = ""
@@ -169,8 +212,6 @@ def clear_others(changed_key):
         if key != changed_key:
             st.session_state[key] = ""
 
-# --- ÜST ARAMA PANELİ ---
-st.markdown("<h3>🔍 Ürün Arama</h3>", unsafe_allow_html=True)
 c1, c2, c3, c4 = st.columns(4)
 
 list_b = sorted([safe_str(x) for x in df_genel[HARF_ANA_KOD].unique() if safe_str(x)])
@@ -178,14 +219,11 @@ list_c = sorted([safe_str(x) for x in df_genel[HARF_MULTI_KOD].unique() if safe_
 list_d = sorted([safe_str(x) for x in df_genel[HARF_BARKOD].unique() if safe_str(x)])
 list_g = sorted([safe_str(x) for x in df_genel[HARF_TEDARIKCI].unique() if safe_str(x)])
 
-with c1: 
-    sel_b = st.selectbox("Ürün Kodu", [""] + list_b, key="sel_b", on_change=clear_others, args=("sel_b",))
-with c2: 
-    sel_c = st.selectbox("Multikod", [""] + list_c, key="sel_c", on_change=clear_others, args=("sel_c",))
-with c3: 
-    sel_d = st.selectbox("Barkod", [""] + list_d, key="sel_d", on_change=clear_others, args=("sel_d",))
-with c4: 
-    sel_g = st.selectbox("Tedarikçi Kd", [""] + list_g, key="sel_g", on_change=clear_others, args=("sel_g",))
+with c1: st.selectbox("Ürün Kodu", [""] + list_b, key="sel_b", on_change=clear_others, args=("sel_b",))
+with c2: st.selectbox("Multikod", [""] + list_c, key="sel_c", on_change=clear_others, args=("sel_c",))
+with c3: st.selectbox("Barkod", [""] + list_d, key="sel_d", on_change=clear_others, args=("sel_d",))
+with c4: st.selectbox("Tedarikçi Kd", [""] + list_g, key="sel_g", on_change=clear_others, args=("sel_g",))
+st.markdown("</div>", unsafe_allow_html=True)
 
 selected_row = None
 if st.session_state.sel_b: selected_row = df_genel[df_genel[HARF_ANA_KOD].apply(safe_str) == st.session_state.sel_b]
@@ -209,7 +247,6 @@ if selected_row is not None and not selected_row.empty:
     v_termin = safe_str(row[HARF_TERMIN])
     v_stok = safe_str(row[HARF_STOK])
     v_katalog = "X" if "X" in str(row[HARF_KATALOG]).upper() else ""
-    
     v_gorsel_link = safe_str(row[HARF_GORSEL_LINK])
 
     koli_l = safe_str(row[HARF_KOLI_L])
@@ -227,47 +264,10 @@ if selected_row is not None and not selected_row.empty:
     current_kargo_raw = clean_float(v_kargo)
     current_fiyat_raw = clean_float(v_fiyat)
 
-    # --- BİLGİ VE GÖRSEL PANELİ ---
-    col_left, col_right = st.columns([2, 1])
+    # --- 2. BÖLÜM: HEMEN ALTINDA SOLDA GÖRSEL (%50 BÜYÜTÜLMÜŞ), SAĞDA SİYAH YAZILI HTML KARTLARI ---
+    col_img, col_detay = st.columns([1, 2])
 
-    with col_left:
-        r1_1, r1_2 = st.columns(2)
-        r1_1.text_input("Kod:", v_kod, disabled=True)
-        r1_2.text_input("Barkod:", v_barkod, disabled=True)
-
-        r2_1, r2_2 = st.columns(2)
-        r2_1.text_input("TY ID:", v_ty, disabled=True)
-        r2_2.text_input("HB SKU:", v_hb, disabled=True)
-
-        r3_1, r3_2 = st.columns(2)
-        r3_1.text_input("Ted Adı:", v_ted_adi, disabled=True)
-        r3_2.text_input("Ted Kd:", v_ted_kd, disabled=True)
-
-        r4_1, r4_2 = st.columns(2)
-        r4_1.text_input("Fiyat:", format_money(v_fiyat), disabled=True)
-        r4_2.text_input("Kargo:", format_money(v_kargo), disabled=True)
-
-        r5_1, r5_2 = st.columns(2)
-        r5_1.text_input("Maliyet:", format_money(v_maliyet), disabled=True)
-        r5_2.text_input("Termin:", v_termin, disabled=True)
-
-        r6_1, r6_2 = st.columns(2)
-        r6_1.text_input("Koli:", v_koli, disabled=True)
-        r6_2.text_input("Desi:", v_desi, disabled=True)
-
-        r7_1, r7_2 = st.columns(2)
-        r7_1.text_input("Stok:", v_stok, disabled=True)
-        r7_2.text_input("Katalog:", v_katalog, disabled=True)
-
-        st.caption("📐 Ürün Ölçüleri (H / W / D / Ø)")
-        o1, o2, o3, o4 = st.columns(4)
-        o1.text_input("H:", v_olcu_h, disabled=True)
-        o2.text_input("W:", v_olcu_w, disabled=True)
-        o3.text_input("D:", v_olcu_d, disabled=True)
-        o4.text_input("Ø:", v_olcu_cap, disabled=True)
-
-    with col_right:
-        # BAŞLIK KALDIRILDI, %50 BÜYÜTÜLMÜŞ TIKLANABİLİR LİNK
+    with col_img:
         if v_gorsel_link.startswith("http"):
             st.markdown(f"""
                 <div class="img-container">
@@ -278,14 +278,59 @@ if selected_row is not None and not selected_row.empty:
             """, unsafe_allow_html=True)
         else:
             st.markdown("""
-                <div class="img-container" style="height: 405px;">
+                <div class="img-container" style="height: 400px;">
                     <p style="color: #7f8c8d; font-weight: bold;">Görsel Linki Yok</p>
                 </div>
             """, unsafe_allow_html=True)
 
+    with col_detay:
+        # Sıkıştırılmış Yan Yana Bilgi Kartları (Kesin Siyah Yazı)
+        def render_card(label, val):
+            return f"""
+                <div class="info-card">
+                    <span class="info-label">{label}</span>
+                    <span class="info-value">{val}</span>
+                </div>
+            """
+
+        r1, r2 = st.columns(2)
+        with r1: st.markdown(render_card("Kod", v_kod), unsafe_allow_html=True)
+        with r2: st.markdown(render_card("Barkod", v_barkod), unsafe_allow_html=True)
+
+        r3, r4 = st.columns(2)
+        with r3: st.markdown(render_card("TY ID", v_ty), unsafe_allow_html=True)
+        with r4: st.markdown(render_card("HB SKU", v_hb), unsafe_allow_html=True)
+
+        r5, r6 = st.columns(2)
+        with r5: st.markdown(render_card("Ted Adı", v_ted_adi), unsafe_allow_html=True)
+        with r6: st.markdown(render_card("Ted Kd", v_ted_kd), unsafe_allow_html=True)
+
+        r7, r8 = st.columns(2)
+        with r7: st.markdown(render_card("Fiyat", format_money(v_fiyat)), unsafe_allow_html=True)
+        with r8: st.markdown(render_card("Kargo Fiyatı", format_money(v_kargo)), unsafe_allow_html=True)
+
+        r9, r10 = st.columns(2)
+        with r9: st.markdown(render_card("Maliyet", format_money(v_maliyet)), unsafe_allow_html=True)
+        with r10: st.markdown(render_card("Termin", v_termin), unsafe_allow_html=True)
+
+        r11, r12 = st.columns(2)
+        with r11: st.markdown(render_card("Koli Ölçüleri", v_koli), unsafe_allow_html=True)
+        with r12: st.markdown(render_card("Desi", v_desi), unsafe_allow_html=True)
+
+        r13, r14 = st.columns(2)
+        with r13: st.markdown(render_card("Stok", v_stok), unsafe_allow_html=True)
+        with r14: st.markdown(render_card("Katalog", v_katalog), unsafe_allow_html=True)
+
+        # Ürün Ölçüleri (H / W / D / Ø)
+        o1, o2, o3, o4 = st.columns(4)
+        with o1: st.markdown(render_card("H", v_olcu_h), unsafe_allow_html=True)
+        with o2: st.markdown(render_card("W", v_olcu_w), unsafe_allow_html=True)
+        with o3: st.markdown(render_card("D", v_olcu_d), unsafe_allow_html=True)
+        with o4: st.markdown(render_card("Ø", v_olcu_cap), unsafe_allow_html=True)
+
     st.divider()
 
-    # --- ALT SÜRÜCÜ 1: PY KÂR ANALİZ İSTASYONU ---
+    # --- 3. BÖLÜM: ALT SÜRÜCÜLER (PY KÂR ANALİZ VE KARGO SÖZLÜK MOTORU) ---
     st.markdown("<h3>📊 PY Kâr Analiz İstasyonu</h3>", unsafe_allow_html=True)
     pk1, pk2 = st.columns([1, 2])
 
@@ -296,9 +341,9 @@ if selected_row is not None and not selected_row.empty:
         payda = (1.0 / 1.20) - (kom_oran / 120.0)
         if (current_maliyet_raw > 0 or current_kargo_raw > 0) and payda > 0:
             min_satis = (current_maliyet_raw + current_kargo_raw) / payda
-            st.markdown(f"**Min. Satış Fiyatı:** <span style='color:#3498db; font-size:16px; font-weight:bold;'>{min_satis:.2f} TL</span>", unsafe_allow_html=True)
+            st.markdown(f"**Min. Satış Fiyatı:** <span style='color:#3498db; font-size:15px; font-weight:bold;'>{min_satis:.2f} TL</span>", unsafe_allow_html=True)
         else:
-            st.markdown("**Min. Satış Fiyatı:** <span style='color:#3498db; font-size:16px; font-weight:bold;'>0.00 TL</span>", unsafe_allow_html=True)
+            st.markdown("**Min. Satış Fiyatı:** <span style='color:#3498db; font-size:15px; font-weight:bold;'>0.00 TL</span>", unsafe_allow_html=True)
 
     with pk2:
         if satis_fiyati_kdvli > 0:
@@ -309,20 +354,19 @@ if selected_row is not None and not selected_row.empty:
             net_kar_kdv_haric = satis_kdv_haric - toplam_gider_kdv_haric
 
             m1, m2, m3 = st.columns(3)
-            m1.markdown(f"<p style='color:#7f8c8d; font-size:12px; font-weight:bold;'>PY Kom. Gideri (KDV'siz)</p><p style='color:#e67e22; font-size:18px; font-weight:bold;'>{format_money(kom_kesintisi_net)}</p>", unsafe_allow_html=True)
-            m2.markdown(f"<p style='color:#7f8c8d; font-size:12px; font-weight:bold;'>Maliyet+Kargo+Kom(Net)</p><p style='color:#e74c3c; font-size:18px; font-weight:bold;'>{format_money(toplam_gider_kdv_haric)}</p>", unsafe_allow_html=True)
+            m1.markdown(f"<p style='color:#7f8c8d; font-size:11px; font-weight:bold;'>PY Kom. Gideri (KDV'siz)</p><p style='color:#e67e22; font-size:16px; font-weight:bold;'>{format_money(kom_kesintisi_net)}</p>", unsafe_allow_html=True)
+            m2.markdown(f"<p style='color:#7f8c8d; font-size:11px; font-weight:bold;'>Maliyet+Kargo+Kom(Net)</p><p style='color:#e74c3c; font-size:16px; font-weight:bold;'>{format_money(toplam_gider_kdv_haric)}</p>", unsafe_allow_html=True)
             
             kar_renk = "#e74c3c" if net_kar_kdv_haric < 0 else "#2ecc71"
-            m3.markdown(f"<p style='color:{kar_renk}; font-size:12px; font-weight:bold;'>Net Kâr (KDV Hariç)</p><p style='color:{kar_renk}; font-size:20px; font-weight:bold;'>{format_money(net_kar_kdv_haric)}</p>", unsafe_allow_html=True)
+            m3.markdown(f"<p style='color:{kar_renk}; font-size:11px; font-weight:bold;'>Net Kâr (KDV Hariç)</p><p style='color:{kar_renk}; font-size:18px; font-weight:bold;'>{format_money(net_kar_kdv_haric)}</p>", unsafe_allow_html=True)
         else:
             m1, m2, m3 = st.columns(3)
-            m1.markdown(f"<p style='color:#7f8c8d; font-size:12px; font-weight:bold;'>PY Kom. Gideri (KDV'siz)</p><p style='color:#e67e22; font-size:18px; font-weight:bold;'>-- TL</p>", unsafe_allow_html=True)
-            m2.markdown(f"<p style='color:#7f8c8d; font-size:12px; font-weight:bold;'>Maliyet+Kargo+Kom(Net)</p><p style='color:#e74c3c; font-size:18px; font-weight:bold;'>-- TL</p>", unsafe_allow_html=True)
-            m3.markdown(f"<p style='color:#2ecc71; font-size:12px; font-weight:bold;'>Net Kâr (KDV Hariç)</p><p style='color:#2ecc71; font-size:20px; font-weight:bold;'>-- TL</p>", unsafe_allow_html=True)
+            m1.markdown(f"<p style='color:#7f8c8d; font-size:11px; font-weight:bold;'>PY Kom. Gideri (KDV'siz)</p><p style='color:#e67e22; font-size:16px; font-weight:bold;'>-- TL</p>", unsafe_allow_html=True)
+            m2.markdown(f"<p style='color:#7f8c8d; font-size:11px; font-weight:bold;'>Maliyet+Kargo+Kom(Net)</p><p style='color:#e74c3c; font-size:16px; font-weight:bold;'>-- TL</p>", unsafe_allow_html=True)
+            m3.markdown(f"<p style='color:#2ecc71; font-size:11px; font-weight:bold;'>Net Kâr (KDV Hariç)</p><p style='color:#2ecc71; font-size:18px; font-weight:bold;'>-- TL</p>", unsafe_allow_html=True)
 
     st.divider()
 
-    # --- ALT SÜRÜCÜ 2: CANLI DESİ HESAPLA & KARGO FİRMA FİYATLARI ---
     st.markdown("<h3>📦 Canlı Desi & Kargo Fiyatları</h3>", unsafe_allow_html=True)
     d1, d2, d3, d4 = st.columns(4)
     
@@ -335,32 +379,38 @@ if selected_row is not None and not selected_row.empty:
     c_yuk = d3.number_input("Yükseklik", value=init_yuk)
 
     calc_desi = (c_en * c_boy * c_yuk) / 3000.0 if (c_en > 0 and c_boy > 0 and c_yuk > 0) else 0.0
-    d4.markdown(f"<p style='color:#7f8c8d; font-size:12px; font-weight:bold;'>Sonuç Desi</p><p style='color:#3498db; font-size:20px; font-weight:bold;'>{calc_desi:.2f}</p>", unsafe_allow_html=True)
+    d4.markdown(f"<p style='color:#7f8c8d; font-size:11px; font-weight:bold;'>Sonuç Desi</p><p style='color:#3498db; font-size:18px; font-weight:bold;'>{calc_desi:.2f}</p>", unsafe_allow_html=True)
 
-    # 1.0 İLE ÇARPIMLI GARANTİLİ NUMERİK KARGO MOTORU
-    if calc_desi > 0 and df_kargo is not None:
-        desi_tam_hedef = math.ceil(calc_desi) * 1.0  # Hedef desiyi saf matematiksel float'a kilitler
+    # GÖMÜLÜ SÖZLÜK (DICTIONARY) İLE GARANTİLİ KARGO FİYAT ÇEKME MOTORU
+    if calc_desi > 0 and kargo_dict:
+        desi_hedef = math.ceil(calc_desi)
         try:
-            df_kargo_clean = df_kargo.copy()
-            # Tablodan gelen (başlıklar dahil) tüm veriyi önce temizleyip, sonra 1.0 ile çarpıp numerik diziye dönüştürüyor
-            df_kargo_clean["DESI_NUM"] = df_kargo_clean[KARGO_HARF_DESI].apply(lambda x: clean_float(x) * 1.0)
-            
-            # Doğrudan tam sayısal maskeleme
-            mask_kargo = df_kargo_clean["DESI_NUM"] == desi_tam_hedef
-            kargo_satir = df_kargo_clean[mask_kargo]
+            # Sözlükte tam eşit desiyi bul, yoksa en yakın üst desiyi bul
+            matched_key = None
+            if desi_hedef in kargo_dict:
+                matched_key = desi_hedef
+            else:
+                available_desis = sorted(kargo_dict.keys())
+                for d in available_desis:
+                    if d >= desi_hedef:
+                        matched_key = d
+                        break
+                if not matched_key and available_desis:
+                    matched_key = available_desis[-1]
 
-            if not kargo_satir.empty:
-                dhl_val = kargo_satir.iloc[0][KARGO_HARF_DHL]
-                hj_val = kargo_satir.iloc[0][KARGO_HARF_HJ]
-                hjxl_val = kargo_satir.iloc[0][KARGO_HARF_HJXL]
+            if matched_key and matched_key in kargo_dict:
+                prices = kargo_dict[matched_key]
+                dhl_val = prices['DHL']
+                hj_val = prices['HJ']
+                hjxl_val = prices['HJXL']
 
                 kf1, kf2, kf3 = st.columns(3)
-                kf1.markdown(f"<p style='color:#7f8c8d; font-size:12px; font-weight:bold;'>DHL:</p><p style='color:#e67e22; font-size:18px; font-weight:bold;'>{format_money(dhl_val)}</p>", unsafe_allow_html=True)
-                kf2.markdown(f"<p style='color:#7f8c8d; font-size:12px; font-weight:bold;'>HJ:</p><p style='color:#9b59b6; font-size:18px; font-weight:bold;'>{format_money(hj_val)}</p>", unsafe_allow_html=True)
-                kf3.markdown(f"<p style='color:#7f8c8d; font-size:12px; font-weight:bold;'>HJXL:</p><p style='color:#e74c3c; font-size:18px; font-weight:bold;'>{format_money(hjxl_val)}</p>", unsafe_allow_html=True)
+                kf1.markdown(f"<p style='color:#7f8c8d; font-size:11px; font-weight:bold;'>DHL:</p><p style='color:#e67e22; font-size:16px; font-weight:bold;'>{format_money(dhl_val)}</p>", unsafe_allow_html=True)
+                kf2.markdown(f"<p style='color:#7f8c8d; font-size:11px; font-weight:bold;'>HJ:</p><p style='color:#9b59b6; font-size:16px; font-weight:bold;'>{format_money(hj_val)}</p>", unsafe_allow_html=True)
+                kf3.markdown(f"<p style='color:#7f8c8d; font-size:11px; font-weight:bold;'>HJXL:</p><p style='color:#e74c3c; font-size:16px; font-weight:bold;'>{format_money(hjxl_val)}</p>", unsafe_allow_html=True)
             else:
-                st.warning(f"{int(desi_tam_hedef)} desi için kargo tablosunda fiyat bulunamadı.")
+                st.warning(f"{desi_hedef} desi için kargo fiyatı bulunamadı.")
         except Exception as ex:
-            st.error(f"Kargo tablosu okunurken hata: {ex}")
+            st.error(f"Kargo hesaplama hatası: {ex}")
 else:
-    st.info("Arama yapmak için yukarıdaki kutucuklardan bir ürün seçiniz.")
+    st.info("Arama yapmak için yukarıdaki arama panelinden bir ürün seçiniz.")
