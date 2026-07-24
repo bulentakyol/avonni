@@ -11,17 +11,17 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- GOOGLE SHEETS & DRIVE ID ---
 SHEET_ID = "1F_kdWWEPL6GnlCzk3B9Ji1OoE-juZkCSZegyqbgFg1o"
 DRIVE_FOLDER_ID = "1meshrbBNQqyE0qXRbZ338ndBDnbDl56T"
 
-# KOYU TEMA VE OKUNABİLİRLİK DÜZENLEMESİ
+# KOYU TEMA VE YAZI OKUNABİLİRLİK DÜZENLEMESİ
 st.markdown("""
     <style>
     .stApp { background-color: #0e1117; color: #ffffff; }
     div[data-baseweb="input"] { background-color: #1a1e24 !important; border: 1px solid #2d3748 !important; border-radius: 6px; }
-    input { color: #ffffff !important; font-weight: 600 !important; }
-    div[data-testid="stMetricValue"] { font-size: 22px !important; font-weight: bold; }
+    input { color: #ffffff !important; font-weight: 700 !important; -webkit-text-fill-color: #ffffff !important; }
+    label { color: #a0aec0 !important; font-weight: 600 !important; }
+    div[data-testid="stMetricValue"] { font-size: 22px !important; font-weight: bold; color: #2ecc71 !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -61,7 +61,6 @@ KARGO_HARF_DHL = harf_to_indeks("C")
 KARGO_HARF_HJ = harf_to_indeks("D")
 KARGO_HARF_HJXL = harf_to_indeks("K")
 
-# SAYI FORMATLAYICI & TEMİZLEYİCİ
 def clean_float(val):
     if pd.isna(val) or val is None: return 0.0
     s = str(val).strip()
@@ -98,14 +97,15 @@ def text_clean(val):
     s = str(val).replace(".0", "").strip()
     return "" if s.lower() == "nan" else s
 
-# VERİ YÜKLEME ENGINE
+# VERİ YÜKLEME (KARGO SEKME DÜZELTMESİ EKLENDİ)
 @st.cache_data(ttl=30)
 def load_data():
     url_genel = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=GENEL"
     url_kargo = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=KARGO"
     
     df_genel = pd.read_csv(url_genel, header=None, dtype=str)
-    df_kargo = pd.read_csv(url_kargo, header=None, dtype=str)
+    # Kargo sekmesinde ilk satır başlık olduğu için skiprows=1 yapıp temiz okuyoruz
+    df_kargo = pd.read_csv(url_kargo, header=None, skiprows=1, dtype=str)
     return df_genel, df_kargo
 
 st.title("💡 Avonni 4'lü Arama ve Kâr Analiz İstasyonu")
@@ -209,10 +209,10 @@ if selected_row is not None and not selected_row.empty:
 
     with col_right:
         st.subheader("🖼️ Ürün Görseli")
-        # Seçili Ürün Kodu Görsel Bağlama
-        st.markdown(f"**Ürün Kodu:** `{v_kod}`")
-        drive_embed_url = f"https://drive.google.com/embeddedfolderview?id={DRIVE_FOLDER_ID}#list"
-        st.components.v1.iframe(drive_embed_url, height=300, scrolling=True)
+        st.info(f"Aranan Ürün Kodu: **{v_kod}**")
+        # Drive Klasör Görünümü
+        drive_embed_url = f"https://drive.google.com/embeddedfolderview?id={DRIVE_FOLDER_ID}#grid"
+        st.components.v1.iframe(drive_embed_url, height=310, scrolling=True)
 
     st.divider()
 
@@ -264,13 +264,17 @@ if selected_row is not None and not selected_row.empty:
     if calc_desi > 0 and df_kargo is not None:
         desi_tam = math.ceil(calc_desi)
         try:
-            # KARGO SEKMEDEKİ SAYISAL HASSAS EŞLEŞTİRME ENGINE
+            # KARGO SEKME HASSAS MASKING
             df_kargo_clean = df_kargo.copy()
-            # İlk iki satırdaki olası başlıkları atlayıp sayısal sütuna çeviriyoruz
             df_kargo_clean["DESI_NUM"] = df_kargo_clean[KARGO_HARF_DESI].apply(clean_float)
             
+            # Tam eşleşme (örnek: 42.0 == 42.0)
             mask_kargo = df_kargo_clean["DESI_NUM"] == float(desi_tam)
             kargo_satir = df_kargo_clean[mask_kargo]
+
+            if kargo_satir.empty:
+                # Tam eşleşmezse desiden büyük veya eşit ilk satırı alma yedek mekanizması
+                kargo_satir = df_kargo_clean[df_kargo_clean["DESI_NUM"] >= float(desi_tam)]
 
             if not kargo_satir.empty:
                 dhl_val = kargo_satir.iloc[0][KARGO_HARF_DHL]
@@ -282,20 +286,7 @@ if selected_row is not None and not selected_row.empty:
                 kf2.metric("HJ Fiyatı", format_money(hj_val))
                 kf3.metric("HJXL Fiyatı", format_money(hjxl_val))
             else:
-                # Eğer tam desi eşleşmezse en yakın büyük desiyi bulma yedek mekanizması
-                ust_desiler = df_kargo_clean[df_kargo_clean["DESI_NUM"] >= float(desi_tam)]
-                if not ust_desiler.empty:
-                    kargo_satir = ust_desiler.iloc[0]
-                    dhl_val = kargo_satir[KARGO_HARF_DHL]
-                    hj_val = kargo_satir[KARGO_HARF_HJ]
-                    hjxl_val = kargo_satir[KARGO_HARF_HJXL]
-
-                    kf1, kf2, kf3 = st.columns(3)
-                    kf1.metric("DHL Fiyatı", format_money(dhl_val))
-                    kf2.metric("HJ Fiyatı", format_money(hj_val))
-                    kf3.metric("HJXL Fiyatı", format_money(hjxl_val))
-                else:
-                    st.warning(f"{desi_tam} desi için kargo tablosunda fiyat bulunamadı.")
+                st.warning(f"{desi_tam} desi için kargo tablosunda fiyat bulunamadı.")
         except Exception as ex:
             st.error(f"Kargo tablosu okunurken hata: {ex}")
 else:
