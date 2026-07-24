@@ -15,27 +15,37 @@ st.set_page_config(
 SHEET_ID = "1F_kdWWEPL6GnlCzk3B9Ji1OoE-juZkCSZegyqbgFg1o"
 DRIVE_FOLDER_ID = "1meshrbBNQqyE0qXRbZ338ndBDnbDl56T"
 
-# MASAÜSTÜ KODUNDAKİ VİZON / KOYU ANTRASİT TEMASI VE RENK PALETİ
+# 1. ÇÖZÜM: CSS İLE KUTUCUKLAR VE SİYAH YAZI DÜZENLEMESİ
 st.markdown("""
     <style>
-    .stApp { background-color: #0e1117; color: #ffffff; }
-    div[data-baseweb="input"] { background-color: #141414 !important; border: 1px solid #2c3e50 !important; border-radius: 4px; }
-    input { color: #ffffff !important; font-weight: 600 !important; -webkit-text-fill-color: #ffffff !important; }
+    .stApp { background-color: #1e1e1e; color: #ffffff; }
+    
+    /* Input kutularının genel ayarı: Arka planı açık gri, yazılar SİYAH */
+    div[data-baseweb="input"] { 
+        background-color: #f1f2f6 !important; 
+        border: 1px solid #2c3e50 !important; 
+        border-radius: 4px; 
+    }
+    
+    /* Aktif ve Pasif (Disabled) inputların yazı rengini kesin olarak SİYAH yapma */
+    input, input:disabled, input::placeholder { 
+        color: #000000 !important; 
+        font-weight: 800 !important; 
+        -webkit-text-fill-color: #000000 !important; 
+        opacity: 1 !important;
+    }
+    
+    /* Pasif kutuların arka planını biraz daha koyulaştırarak ayrım sağlama */
+    div[data-baseweb="input"]:has(input:disabled) {
+        background-color: #dcdde1 !important;
+    }
+    
     label { color: #3498db !important; font-size: 11px !important; font-weight: bold !important; }
     div[data-testid="stMetricValue"] { font-size: 20px !important; font-weight: bold; }
-    
-    /* Vizon / Koyu Antrasit Çerçeve Kart Kutuları */
-    .vizon-box {
-        background-color: #1e1e1e;
-        border: 1px solid #2c3e50;
-        border-radius: 6px;
-        padding: 12px;
-        margin-bottom: 10px;
-    }
     </style>
 """, unsafe_allow_html=True)
 
-# SÜTUN HARF TANIMLAMALARI (Masaüstü Mantığı Birebir)
+# SÜTUN HARF TANIMLAMALARI
 def harf_to_indeks(harf):
     indeks = 0
     for char in harf.upper():
@@ -71,7 +81,7 @@ KARGO_HARF_DHL = harf_to_indeks("C")
 KARGO_HARF_HJ = harf_to_indeks("D")
 KARGO_HARF_HJXL = harf_to_indeks("K")
 
-# --- HASSAS SAYI DÖNÜŞTÜRÜCÜ & FORMATLAYICI ---
+# --- HASSAS SAYI DÖNÜŞTÜRÜCÜ ---
 def clean_float(val):
     if pd.isna(val) or val is None: return 0.0
     s = str(val).strip()
@@ -108,14 +118,13 @@ def text_clean(val):
     s = str(val).replace(".0", "").strip()
     return "" if s.lower() == "nan" else s
 
-# --- VERİ YÜKLEME (KARGO SEKME 'skiprows=1' MASAÜSTÜ MANTIĞI) ---
+# --- VERİ YÜKLEME ---
 @st.cache_data(ttl=30)
 def load_data():
     url_genel = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=GENEL"
     url_kargo = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=KARGO"
     
     df_genel = pd.read_csv(url_genel, header=None, dtype=str)
-    # Masaüstü kodundaki kargo_sekmesini_yukle mantığı: skiprows=1 ile başlığı atlıyoruz
     df_kargo = pd.read_csv(url_kargo, header=None, skiprows=1, dtype=str)
     return df_genel, df_kargo
 
@@ -127,7 +136,7 @@ except Exception as e:
     st.error(f"Google Sheets erişim hatası: {e}")
     st.stop()
 
-# --- 1. ÜST PANEL: YAN YANA 4 ARAMA KUTUSU ---
+# --- ÜST PANEL ---
 st.subheader("🔍 Ürün Arama")
 c1, c2, c3, c4 = st.columns(4)
 
@@ -179,7 +188,7 @@ if selected_row is not None and not selected_row.empty:
     current_kargo_raw = clean_float(v_kargo)
     current_fiyat_raw = clean_float(v_fiyat)
 
-    # --- 2. ORTA PANEL: BİLGİ VE GÖRSEL PANELİ ---
+    # --- BİLGİ VE GÖRSEL PANELİ ---
     col_left, col_right = st.columns([2, 1])
 
     with col_left:
@@ -211,7 +220,6 @@ if selected_row is not None and not selected_row.empty:
         r7_1.text_input("Stok:", v_stok, disabled=True)
         r7_2.text_input("Katalog:", v_katalog, disabled=True)
 
-        # 8. Satır Ürün Ölçüleri (H, W, D, Ø)
         st.caption("📐 Ürün Ölçüleri (H / W / D / Ø)")
         o1, o2, o3, o4 = st.columns(4)
         o1.text_input("H:", v_olcu_h, disabled=True)
@@ -221,14 +229,13 @@ if selected_row is not None and not selected_row.empty:
 
     with col_right:
         st.subheader("🖼️ Ürün Görseli")
-        # Masaüstü Gorsel_getir mantığı: Ürün koduna göre doğrudan resmi çağırma
         st.markdown(f"**Aranan Ürün Kodu:** `{v_kod}`")
-        drive_thumb_url = f"https://drive.google.com/thumbnail?id={DRIVE_FOLDER_ID}&sz=w1000"
-        st.image(drive_thumb_url, caption=f"{v_kod}.jpg", use_column_width=True)
+        # Google Drive doğrudan dosya adıyla resim çekmeye izin vermediği için uyarı mesajı
+        st.info("Bulut tabanlı sistemlerde Google Drive klasöründen dosya adıyla görsel çekmek Google güvenlik politikaları gereği desteklenmemektedir. Resimleri bir web sunucusunda (örn: siteniz.com/images/) barındırmanız gerekmektedir.")
 
     st.divider()
 
-    # --- 3. ALT SÜRÜCÜ 1: CANLI PAZARYERİ KÂR ANALİZ İSTASYONU ---
+    # --- ALT SÜRÜCÜ 1: CANLI PAZARYERİ KÂR ANALİZ İSTASYONU ---
     st.subheader("📊 Canlı Pazaryeri Kâr Analiz İstasyonu (KDV Hariç Net Kâr)")
     pk1, pk2 = st.columns([1, 2])
 
@@ -255,7 +262,6 @@ if selected_row is not None and not selected_row.empty:
             m1.metric("PY Kom. Gideri (KDV'siz)", format_money(kom_kesintisi_net))
             m2.metric("Maliyet+Kargo+Kom(Net)", format_money(toplam_gider_kdv_haric))
             
-            # Masaüstü kodundaki net kâr negatifse kırmızı (#e74c3c), pozitifse yeşil (#2ecc71) mantığı
             kar_renk = "#e74c3c" if net_kar_kdv_haric < 0 else "#2ecc71"
             m3.markdown(f"<p style='color:{kar_renk}; font-size:14px; font-weight:bold; margin-bottom:2px;'>Net Kâr (KDV Hariç)</p><p style='color:{kar_renk}; font-size:22px; font-weight:bold;'>{format_money(net_kar_kdv_haric)}</p>", unsafe_allow_html=True)
         else:
@@ -266,7 +272,7 @@ if selected_row is not None and not selected_row.empty:
 
     st.divider()
 
-    # --- 4. ALT SÜRÜCÜ 2: CANLI DESİ HESAPLA & KARGO FİRMA FİYATLARI ---
+    # --- ALT SÜRÜCÜ 2: CANLI DESİ HESAPLA & KARGO FİRMA FİYATLARI ---
     st.subheader("📦 Canlı Desi Hesapla & Kargo Firma Fiyatları")
     d1, d2, d3, d4 = st.columns(4)
     
@@ -281,29 +287,29 @@ if selected_row is not None and not selected_row.empty:
     calc_desi = (c_en * c_boy * c_yuk) / 3000.0 if (c_en > 0 and c_boy > 0 and c_yuk > 0) else 0.0
     d4.metric("Sonuc Desi", f"{calc_desi:.2f}")
 
-    # MASAÜSTÜ KARGO EŞLEŞTİRME MOTORU (astype(float) == float(desi_tam))
+    # 2. ÇÖZÜM: KARGO EŞLEŞTİRME (GARANTİLİ YAKINLIK ALGORİTMASI)
     if calc_desi > 0 and df_kargo is not None:
         desi_tam = math.ceil(calc_desi)
         try:
             df_kargo_clean = df_kargo.copy()
-            # Masaüstü kodu: idx_desi = self.harf_to_indeks(KARGO_HARF_DESI)
             df_kargo_clean["DESI_NUM"] = df_kargo_clean[KARGO_HARF_DESI].apply(clean_float)
             
-            # Masaüstündeki birebir tam eşleştirme maskesi
-            mask_kargo = df_kargo_clean["DESI_NUM"].astype(float) == float(desi_tam)
-            kargo_satir = df_kargo_clean[mask_kargo]
+            # Hataya sebep olan 'astype(float) == float(desi_tam)' yerine 
+            # büyük ya da eşit olan ilk satırı yakalayan 'Nearest Match' yöntemi eklendi.
+            uygun_desiler = df_kargo_clean[df_kargo_clean["DESI_NUM"] >= float(desi_tam)].sort_values(by="DESI_NUM")
 
-            if not kargo_satir.empty:
-                dhl_val = kargo_satir.iloc[0][KARGO_HARF_DHL]
-                hj_val = kargo_satir.iloc[0][KARGO_HARF_HJ]
-                hjxl_val = kargo_satir.iloc[0][KARGO_HARF_HJXL]
+            if not uygun_desiler.empty:
+                kargo_satir = uygun_desiler.iloc[0]
+                dhl_val = kargo_satir[KARGO_HARF_DHL]
+                hj_val = kargo_satir[KARGO_HARF_HJ]
+                hjxl_val = kargo_satir[KARGO_HARF_HJXL]
 
                 kf1, kf2, kf3 = st.columns(3)
                 kf1.markdown(f"<p style='color:#7f8c8d; font-size:12px; font-weight:bold;'>DHL:</p><p style='color:#e67e22; font-size:20px; font-weight:bold;'>{format_money(dhl_val)}</p>", unsafe_allow_html=True)
                 kf2.markdown(f"<p style='color:#7f8c8d; font-size:12px; font-weight:bold;'>HJ:</p><p style='color:#9b59b6; font-size:20px; font-weight:bold;'>{format_money(hj_val)}</p>", unsafe_allow_html=True)
                 kf3.markdown(f"<p style='color:#7f8c8d; font-size:12px; font-weight:bold;'>HJXL:</p><p style='color:#e74c3c; font-size:20px; font-weight:bold;'>{format_money(hjxl_val)}</p>", unsafe_allow_html=True)
             else:
-                st.warning(f"{desi_tam} desi için kargo tablosunda fiyat bulunamadı.")
+                st.warning(f"{desi_tam} desi için kargo tablosunda fiyat bulunamadı. Tablonuzdaki maksimum desi sınırını aşmış olabilirsiniz.")
         except Exception as ex:
             st.error(f"Kargo tablosu okunurken hata: {ex}")
 else:
