@@ -15,6 +15,16 @@ st.set_page_config(
 SHEET_ID = "1F_kdWWEPL6GnlCzk3B9Ji1OoE-juZkCSZegyqbgFg1o"
 DRIVE_FOLDER_ID = "1meshrbBNQqyE0qXRbZ338ndBDnbDl56T"
 
+# KOYU TEMA VE OKUNABİLİRLİK DÜZENLEMESİ
+st.markdown("""
+    <style>
+    .stApp { background-color: #0e1117; color: #ffffff; }
+    div[data-baseweb="input"] { background-color: #1a1e24 !important; border: 1px solid #2d3748 !important; border-radius: 6px; }
+    input { color: #ffffff !important; font-weight: 600 !important; }
+    div[data-testid="stMetricValue"] { font-size: 22px !important; font-weight: bold; }
+    </style>
+""", unsafe_allow_html=True)
+
 def harf_to_indeks(harf):
     indeks = 0
     for char in harf.upper():
@@ -51,25 +61,21 @@ KARGO_HARF_DHL = harf_to_indeks("C")
 KARGO_HARF_HJ = harf_to_indeks("D")
 KARGO_HARF_HJXL = harf_to_indeks("K")
 
-# --- KUSURSUZ SAYI DÖNÜŞTÜRÜCÜ (BİNLİK / ONDALIK DÜZELTİCİ) ---
+# SAYI FORMATLAYICI & TEMİZLEYİCİ
 def clean_float(val):
-    if pd.isna(val) or val is None:
-        return 0.0
+    if pd.isna(val) or val is None: return 0.0
     s = str(val).strip()
-    if not s or s == "--":
-        return 0.0
+    if not s or s == "--": return 0.0
     s = re.sub(r"[^\d,\.]", "", s)
-    if not s:
-        return 0.0
+    if not s: return 0.0
     
-    # Türkiye Formatı Düzeltme (11.748,00 -> 11748.00 veya 11.748 -> 11748.0)
     if "," in s and "." in s:
         s = s.replace(".", "").replace(",", ".")
     elif "," in s:
         s = s.replace(",", ".")
     elif "." in s:
         parts = s.split(".")
-        if len(parts) == 2 and len(parts[1]) == 3: # 11.748 biçimindeyse binlik noktadır
+        if len(parts) == 2 and len(parts[1]) == 3:
             s = s.replace(".", "")
     try:
         return float(s)
@@ -92,7 +98,7 @@ def text_clean(val):
     s = str(val).replace(".0", "").strip()
     return "" if s.lower() == "nan" else s
 
-# --- VERİ YÜKLEME ---
+# VERİ YÜKLEME ENGINE
 @st.cache_data(ttl=30)
 def load_data():
     url_genel = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=GENEL"
@@ -203,10 +209,10 @@ if selected_row is not None and not selected_row.empty:
 
     with col_right:
         st.subheader("🖼️ Ürün Görseli")
-        # Google Drive Arama & Görsel Bağlama Motoru
-        drive_embed_url = f"https://drive.google.com/embeddedfolderview?id={DRIVE_FOLDER_ID}#grid"
-        st.components.v1.iframe(drive_embed_url, height=320, scrolling=True)
-        st.caption(f"Klasördeki Dosya: **{v_kod}.jpg**")
+        # Seçili Ürün Kodu Görsel Bağlama
+        st.markdown(f"**Ürün Kodu:** `{v_kod}`")
+        drive_embed_url = f"https://drive.google.com/embeddedfolderview?id={DRIVE_FOLDER_ID}#list"
+        st.components.v1.iframe(drive_embed_url, height=300, scrolling=True)
 
     st.divider()
 
@@ -216,8 +222,7 @@ if selected_row is not None and not selected_row.empty:
 
     with pk1:
         kom_oran = st.number_input("Komisyon (%)", value=20.4, step=0.1)
-        # Varsayılan satış fiyatını Excel'deki satış fiyatından çekiyoruz
-        satis_fiyati_kdvli = st.number_input("Satış Fiyatı (KDV'li)", value=float(current_fiyat_raw) if current_fiyat_raw > 0 else 4295.0, step=10.0)
+        satis_fiyati_kdvli = st.number_input("Satış Fiyatı (KDV'li)", value=float(current_fiyat_raw) if current_fiyat_raw > 0 else 13970.0, step=10.0)
         
         payda = (1.0 / 1.20) - (kom_oran / 120.0)
         if (current_maliyet_raw > 0 or current_kargo_raw > 0) and payda > 0:
@@ -241,13 +246,13 @@ if selected_row is not None and not selected_row.empty:
 
     st.divider()
 
-    # --- ALT SÜRÜCÜ 2: CANLI DESİ & KARGO FİRMA FİYATLARI ---
+    # --- ALT SÜRÜCÜ 2: CANLI DESİ HESAPLA & KARGO FİRMA FİYATLARI ---
     st.subheader("📦 Canlı Desi Hesapla & Kargo Firma Fiyatları")
     d1, d2, d3, d4 = st.columns(4)
     
-    init_en = clean_float(koli_w) if koli_w else 55.0
-    init_boy = clean_float(koli_l) if koli_l else 60.0
-    init_yuk = clean_float(koli_h) if koli_h else 60.0
+    init_en = clean_float(koli_w) if koli_w else 50.0
+    init_boy = clean_float(koli_l) if koli_l else 50.0
+    init_yuk = clean_float(koli_h) if koli_h else 50.0
 
     c_en = d1.number_input("En", value=init_en)
     c_boy = d2.number_input("Boy", value=init_boy)
@@ -259,8 +264,9 @@ if selected_row is not None and not selected_row.empty:
     if calc_desi > 0 and df_kargo is not None:
         desi_tam = math.ceil(calc_desi)
         try:
-            # KARGO sekmesini hatasız tarama engine
+            # KARGO SEKMEDEKİ SAYISAL HASSAS EŞLEŞTİRME ENGINE
             df_kargo_clean = df_kargo.copy()
+            # İlk iki satırdaki olası başlıkları atlayıp sayısal sütuna çeviriyoruz
             df_kargo_clean["DESI_NUM"] = df_kargo_clean[KARGO_HARF_DESI].apply(clean_float)
             
             mask_kargo = df_kargo_clean["DESI_NUM"] == float(desi_tam)
@@ -276,7 +282,20 @@ if selected_row is not None and not selected_row.empty:
                 kf2.metric("HJ Fiyatı", format_money(hj_val))
                 kf3.metric("HJXL Fiyatı", format_money(hjxl_val))
             else:
-                st.warning(f"{desi_tam} desi için kargo tablosunda fiyat bulunamadı.")
+                # Eğer tam desi eşleşmezse en yakın büyük desiyi bulma yedek mekanizması
+                ust_desiler = df_kargo_clean[df_kargo_clean["DESI_NUM"] >= float(desi_tam)]
+                if not ust_desiler.empty:
+                    kargo_satir = ust_desiler.iloc[0]
+                    dhl_val = kargo_satir[KARGO_HARF_DHL]
+                    hj_val = kargo_satir[KARGO_HARF_HJ]
+                    hjxl_val = kargo_satir[KARGO_HARF_HJXL]
+
+                    kf1, kf2, kf3 = st.columns(3)
+                    kf1.metric("DHL Fiyatı", format_money(dhl_val))
+                    kf2.metric("HJ Fiyatı", format_money(hj_val))
+                    kf3.metric("HJXL Fiyatı", format_money(hjxl_val))
+                else:
+                    st.warning(f"{desi_tam} desi için kargo tablosunda fiyat bulunamadı.")
         except Exception as ex:
             st.error(f"Kargo tablosu okunurken hata: {ex}")
 else:
