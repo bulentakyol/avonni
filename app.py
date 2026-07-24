@@ -13,28 +13,28 @@ st.set_page_config(
 
 SHEET_ID = "1F_kdWWEPL6GnlCzk3B9Ji1OoE-juZkCSZegyqbgFg1o"
 
-# --- KESİN SİYAH YAZI VE STİL TANIMLAMALARI ---
+# --- STİL TANIMLAMALARI (MOBİL UYUMLU HALE GETİRİLDİ) ---
 st.markdown("""
     <style>
     .stApp { background-color: #1e1e1e; color: #ffffff; }
-    
-    div[data-baseweb="select"] * { 
-        color: #000000 !important; 
-        -webkit-text-fill-color: #000000 !important; 
-        font-weight: 800 !important; 
+
+    div[data-baseweb="select"] * {
+        color: #000000 !important;
+        -webkit-text-fill-color: #000000 !important;
+        font-weight: 800 !important;
     }
-    div[data-baseweb="input"] * { 
-        color: #000000 !important; 
-        -webkit-text-fill-color: #000000 !important; 
-        font-weight: 800 !important; 
+    div[data-baseweb="input"] * {
+        color: #000000 !important;
+        -webkit-text-fill-color: #000000 !important;
+        font-weight: 800 !important;
     }
-    
+
     label { color: #3498db !important; font-size: 11px !important; font-weight: bold !important; }
     div[data-testid="stMetricValue"] { font-size: 16px !important; font-weight: bold; }
-    
+
     h1 { font-size: 20px !important; margin-bottom: 0px !important; padding-bottom: 2px !important; }
     h3 { font-size: 14px !important; margin-bottom: 0px !important; padding-bottom: 2px !important; color: #f1c40f !important; }
-    
+
     .search-container {
         background-color: #141414;
         border: 1px solid #2c3e50;
@@ -43,6 +43,7 @@ st.markdown("""
         margin-bottom: 10px;
     }
 
+    /* Görsel kutusu artık sabit piksel değil, oranla büyüyüp küçülüyor */
     .img-container {
         display: flex;
         justify-content: center;
@@ -51,9 +52,8 @@ st.markdown("""
         padding: 5px;
         border: 1px solid #2c3e50;
         border-radius: 5px;
+        width: 100%;
         max-width: 380px;
-        max-height: 560px;
-        overflow: hidden;
         margin: 0 auto 10px auto;
     }
     .img-container img {
@@ -62,6 +62,54 @@ st.markdown("""
         max-height: 540px;
         object-fit: contain;
         cursor: pointer;
+    }
+
+    /* Genel taşma önleyici: hiçbir eleman ekran genişliğini aşmasın */
+    .block-container {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        max-width: 100% !important;
+    }
+    div, span, p { max-width: 100%; word-wrap: break-word; }
+
+    /* ------------------------------------------------------------ */
+    /* MOBİL EKRAN (768px altı) İÇİN ÖZEL DÜZENLEMELER               */
+    /* ------------------------------------------------------------ */
+    @media (max-width: 768px) {
+        /* Streamlit'in yan yana kolonlarını alt alta yığ */
+        div[data-testid="stHorizontalBlock"] {
+            flex-direction: column !important;
+        }
+        div[data-testid="column"] {
+            width: 100% !important;
+            flex: 1 1 100% !important;
+            min-width: 100% !important;
+        }
+
+        .img-container {
+            max-width: 100% !important;
+        }
+        .img-container img {
+            max-height: 320px !important;
+        }
+
+        h1 { font-size: 17px !important; }
+        h3 { font-size: 13px !important; }
+        label { font-size: 12px !important; }
+
+        div[data-testid="stMetricValue"] { font-size: 15px !important; }
+
+        /* Arama kutuları (Ürün Kodu / Multikod / Barkod / Tedarikçi) mobilde alt alta */
+        div[data-testid="stSelectbox"] { margin-bottom: 6px; }
+    }
+
+    @media (max-width: 480px) {
+        .img-container img {
+            max-height: 260px !important;
+        }
+        span[style*="font-size: 18px"], span[style*="font-size:18px"] {
+            font-size: 15px !important;
+        }
     }
     </style>
 """, unsafe_allow_html=True)
@@ -110,7 +158,7 @@ def clean_float(val):
     if not s or s == "--": return 0.0
     s = re.sub(r"[^\d,\.]", "", s)
     if not s: return 0.0
-    
+
     if "," in s and "." in s:
         s = s.replace(".", "").replace(",", ".")
     elif "," in s:
@@ -146,7 +194,7 @@ def safe_str(val):
                 s = str(int(f))
         except:
             pass
-    if s.endswith(".0"): 
+    if s.endswith(".0"):
         s = s[:-2]
     return s
 
@@ -155,10 +203,10 @@ def safe_str(val):
 def load_data():
     url_genel = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=GENEL"
     url_kargo = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=KARGO"
-    
+
     df_genel = pd.read_csv(url_genel, header=None, dtype=str)
     df_kargo = pd.read_csv(url_kargo, header=None, dtype=str)
-    
+
     kargo_dict = {}
     for idx, row in df_kargo.iterrows():
         try:
@@ -172,7 +220,7 @@ def load_data():
                 }
         except:
             continue
-            
+
     return df_genel, kargo_dict
 
 st.markdown("<h1>💡 Avonni Ürün Analiz</h1>", unsafe_allow_html=True)
@@ -225,7 +273,7 @@ if selected_row is not None and not selected_row.empty:
     v_hb = safe_str(row[HARF_HB_SKU])
     v_ted_adi = safe_str(row[HARF_SAGLAYICI])
     v_ted_kd = safe_str(row[HARF_TEDARIKCI])
-    
+
     v_fiyat = row[HARF_FIYAT]
     v_kargo = row[HARF_KARGO]
     v_maliyet = row[HARF_MALIYET]
@@ -249,7 +297,7 @@ if selected_row is not None and not selected_row.empty:
     current_kargo_raw = clean_float(v_kargo)
     current_fiyat_raw = clean_float(v_fiyat)
 
-    # --- 2. BÖLÜM: GÖRSEL VE YAN YANA DETAYLAR (NATIVE STREAMLIT COMPONENTLER İLE) ---
+    # --- 2. BÖLÜM: GÖRSEL VE YAN YANA DETAYLAR ---
     col_img, col_detay = st.columns([1, 1.5])
 
     with col_img:
@@ -263,13 +311,12 @@ if selected_row is not None and not selected_row.empty:
             """, unsafe_allow_html=True)
         else:
             st.markdown("""
-                <div class="img-container" style="height: 400px;">
+                <div class="img-container" style="min-height: 200px;">
                     <p style="color: #7f8c8d; font-weight: bold;">Görsel Linki Yok</p>
                 </div>
             """, unsafe_allow_html=True)
 
     with col_detay:
-        # HTML ETİKET HATASINI BİTİREN GÜVENLİ NATIVE STREAMLIT KART FONKSİYONU
         def render_native_card(label, val):
             st.markdown(f"""
                 <div style="background-color: #f1f2f6; border: 1px solid #2c3e50; border-radius: 4px; padding: 6px 8px; margin-bottom: 4px;">
@@ -321,11 +368,13 @@ if selected_row is not None and not selected_row.empty:
     with pk1:
         kom_oran = st.number_input("Komisyon (%)", value=23.5, step=0.1)
         satis_fiyati_kdvli = st.number_input("Satış Fiyatı (KDV'li)", value=float(current_fiyat_raw) if current_fiyat_raw > 0 else 0.0, step=10.0)
-        
+
         payda = (1.0 / 1.20) - (kom_oran / 120.0)
         if (current_maliyet_raw > 0 or current_kargo_raw > 0) and payda > 0:
             min_satis = (current_maliyet_raw + current_kargo_raw) / payda
             st.markdown(f"**Min. Satış Fiyatı:** <span style='color:#3498db; font-size:15px; font-weight:bold;'>{min_satis:.2f} TL</span>", unsafe_allow_html=True)
+        elif payda <= 0:
+            st.markdown("**Min. Satış Fiyatı:** <span style='color:#e74c3c; font-size:13px; font-weight:bold;'>Komisyon oranı çok yüksek, hesaplanamıyor</span>", unsafe_allow_html=True)
         else:
             st.markdown("**Min. Satış Fiyatı:** <span style='color:#3498db; font-size:15px; font-weight:bold;'>0.00 TL</span>", unsafe_allow_html=True)
 
@@ -340,7 +389,7 @@ if selected_row is not None and not selected_row.empty:
             m1, m2, m3 = st.columns(3)
             m1.markdown(f"<p style='color:#7f8c8d; font-size:11px; font-weight:bold;'>PY Kom. Gideri (KDV'siz)</p><p style='color:#e67e22; font-size:16px; font-weight:bold;'>{format_money(kom_kesintisi_net)}</p>", unsafe_allow_html=True)
             m2.markdown(f"<p style='color:#7f8c8d; font-size:11px; font-weight:bold;'>Maliyet+Kargo+Kom(Net)</p><p style='color:#e74c3c; font-size:16px; font-weight:bold;'>{format_money(toplam_gider_kdv_haric)}</p>", unsafe_allow_html=True)
-            
+
             kar_renk = "#e74c3c" if net_kar_kdv_haric < 0 else "#2ecc71"
             m3.markdown(f"<p style='color:{kar_renk}; font-size:11px; font-weight:bold;'>Net Kâr (KDV Hariç)</p><p style='color:{kar_renk}; font-size:18px; font-weight:bold;'>{format_money(net_kar_kdv_haric)}</p>", unsafe_allow_html=True)
         else:
@@ -353,7 +402,7 @@ if selected_row is not None and not selected_row.empty:
 
     st.markdown("<h3>📦 Canlı Desi & Kargo Fiyatları</h3>", unsafe_allow_html=True)
     d1, d2, d3, d4 = st.columns(4)
-    
+
     init_en = clean_float(koli_w) if koli_w else 0.0
     init_boy = clean_float(koli_l) if koli_l else 0.0
     init_yuk = clean_float(koli_h) if koli_h else 0.0
