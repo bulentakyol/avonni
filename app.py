@@ -1,4 +1,13 @@
 import streamlit as st
+
+# Şifre Koruma Alanı
+sifre = st.text_input("Lütfen Erişim Şifresini Girin:", type="password")
+
+if sifre != "avn1071":  # İstediğin şifreyi buraya yazabilirsin
+    st.warning("⚠️ Bu uygulama gizlidir. Devam etmek için şifre girmelisiniz.")
+    st.stop()
+
+import streamlit as st
 import pandas as pd
 import math
 import re
