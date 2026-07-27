@@ -78,21 +78,26 @@ st.markdown("""
     /* MOBİL EKRAN (768px altı) İÇİN ÖZEL DÜZENLEMELER               */
     /* ------------------------------------------------------------ */
     @media (max-width: 768px) {
-        /* Streamlit'in yan yana kolonlarını alt alta yığ */
+        /* ESKİ DAVRANIŞ: kolonları tek sütuna (alt alta) yığıyordu.
+           YENİ DAVRANIŞ: kolonları 2'li grid halinde YAN YANA bırak, sığmayan
+           3'lü/4'lü gruplar otomatik alt satıra sarsın (wrap). */
         div[data-testid="stHorizontalBlock"] {
-            flex-direction: column !important;
+            flex-wrap: wrap !important;
+            row-gap: 6px !important;
+            column-gap: 6px !important;
         }
         div[data-testid="column"] {
-            width: 100% !important;
-            flex: 1 1 100% !important;
-            min-width: 100% !important;
+            width: calc(50% - 6px) !important;
+            flex: 1 1 calc(50% - 6px) !important;
+            min-width: calc(50% - 6px) !important;
         }
 
+        /* Görsel mobilde küçük bir kutu (thumbnail) - tıklayınca büyüyecek */
         .img-container {
             max-width: 100% !important;
         }
         .img-container img {
-            max-height: 320px !important;
+            max-height: 220px !important;
         }
 
         h1 { font-size: 17px !important; }
@@ -101,18 +106,48 @@ st.markdown("""
 
         div[data-testid="stMetricValue"] { font-size: 15px !important; }
 
-        /* Arama kutuları (Ürün Kodu / Multikod / Barkod / Tedarikçi) mobilde alt alta */
-        div[data-testid="stSelectbox"] { margin-bottom: 6px; }
+        div[data-testid="stSelectbox"] { margin-bottom: 4px; }
+
+        /* Kart içi yazı/dolgu payını sıkılaştır */
+        div[data-testid="column"] > div > div[data-testid="stMarkdownContainer"] > div[style*="background-color: #f1f2f6"] {
+            padding: 4px 6px !important;
+        }
     }
 
     @media (max-width: 480px) {
         .img-container img {
-            max-height: 260px !important;
+            max-height: 180px !important;
         }
         span[style*="font-size: 18px"], span[style*="font-size:18px"] {
             font-size: 15px !important;
         }
     }
+
+    /* ------------------------------------------------------------ */
+    /* GÖRSEL TIKLA-BÜYÜT (LIGHTBOX) — saf CSS, JS gerektirmez        */
+    /* ------------------------------------------------------------ */
+    .lightbox-toggle { display: none; }
+    .lightbox-overlay {
+        display: none;
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background: rgba(0,0,0,0.92);
+        z-index: 99999;
+        cursor: zoom-out;
+        align-items: center;
+        justify-content: center;
+    }
+    .lightbox-toggle:checked ~ .lightbox-overlay {
+        display: flex;
+    }
+    .lightbox-img {
+        max-width: 92%;
+        max-height: 92%;
+        object-fit: contain;
+        border-radius: 6px;
+    }
+    .img-container { cursor: zoom-in; }
 
     /* ------------------------------------------------------------ */
     /* SAYI GİRİŞ KUTULARINI (Komisyon, Satış Fiyatı, En/Boy/Yükseklik) */
@@ -263,10 +298,7 @@ except Exception as e:
     st.error(f"Google Sheets erişim hatası: {e}")
     st.stop()
 
-# --- 1. BÖLÜM: ARAMA PANELİ ---
-st.markdown("<div class='search-container'>", unsafe_allow_html=True)
-st.markdown("<h3>🔍 Ürün Arama</h3>", unsafe_allow_html=True)
-
+# --- 1. BÖLÜM: ARAMA PANELİ (ürün seçilince otomatik küçülür) ---
 if 'sel_b' not in st.session_state: st.session_state.sel_b = ""
 if 'sel_c' not in st.session_state: st.session_state.sel_c = ""
 if 'sel_d' not in st.session_state: st.session_state.sel_d = ""
@@ -277,18 +309,21 @@ def clear_others(changed_key):
         if key != changed_key:
             st.session_state[key] = ""
 
-c1, c2, c3, c4 = st.columns(4)
+_secim_var = bool(st.session_state.sel_b or st.session_state.sel_c or st.session_state.sel_d or st.session_state.sel_g)
+_panel_basligi = "🔍 Ürün Arama" if not _secim_var else f"🔍 Ürün Arama — değiştirmek için dokun"
 
-list_b = sorted([safe_str(x) for x in df_genel[HARF_ANA_KOD].unique() if safe_str(x)])
-list_c = sorted([safe_str(x) for x in df_genel[HARF_MULTI_KOD].unique() if safe_str(x)])
-list_d = sorted([safe_str(x) for x in df_genel[HARF_BARKOD].unique() if safe_str(x)])
-list_g = sorted([safe_str(x) for x in df_genel[HARF_TEDARIKCI].unique() if safe_str(x)])
+with st.expander(_panel_basligi, expanded=not _secim_var):
+    c1, c2, c3, c4 = st.columns(4)
 
-with c1: st.selectbox("Ürün Kodu", [""] + list_b, key="sel_b", on_change=clear_others, args=("sel_b",))
-with c2: st.selectbox("Multikod", [""] + list_c, key="sel_c", on_change=clear_others, args=("sel_c",))
-with c3: st.selectbox("Barkod", [""] + list_d, key="sel_d", on_change=clear_others, args=("sel_d",))
-with c4: st.selectbox("Tedarikçi Kd", [""] + list_g, key="sel_g", on_change=clear_others, args=("sel_g",))
-st.markdown("</div>", unsafe_allow_html=True)
+    list_b = sorted([safe_str(x) for x in df_genel[HARF_ANA_KOD].unique() if safe_str(x)])
+    list_c = sorted([safe_str(x) for x in df_genel[HARF_MULTI_KOD].unique() if safe_str(x)])
+    list_d = sorted([safe_str(x) for x in df_genel[HARF_BARKOD].unique() if safe_str(x)])
+    list_g = sorted([safe_str(x) for x in df_genel[HARF_TEDARIKCI].unique() if safe_str(x)])
+
+    with c1: st.selectbox("Ürün Kodu", [""] + list_b, key="sel_b", on_change=clear_others, args=("sel_b",))
+    with c2: st.selectbox("Multikod", [""] + list_c, key="sel_c", on_change=clear_others, args=("sel_c",))
+    with c3: st.selectbox("Barkod", [""] + list_d, key="sel_d", on_change=clear_others, args=("sel_d",))
+    with c4: st.selectbox("Tedarikçi Kd", [""] + list_g, key="sel_g", on_change=clear_others, args=("sel_g",))
 
 selected_row = None
 if st.session_state.sel_b: selected_row = df_genel[df_genel[HARF_ANA_KOD].apply(safe_str) == st.session_state.sel_b]
@@ -329,77 +364,87 @@ if selected_row is not None and not selected_row.empty:
     current_kargo_raw = clean_float(v_kargo)
     current_fiyat_raw = clean_float(v_fiyat)
 
-    # --- 2. BÖLÜM: GÖRSEL VE YAN YANA DETAYLAR ---
-    col_img, col_detay = st.columns([1, 1.5])
+    def render_native_card(label, val, col=None):
+        target = col if col is not None else st
+        target.markdown(f"""
+            <div style="background-color: #f1f2f6; border: 1px solid #2c3e50; border-radius: 4px; padding: 6px 8px; margin-bottom: 4px;">
+                <span style="color: #2980b9; font-size: 10px; font-weight: bold; text-transform: uppercase; display: block;">{label}</span>
+                <span style="color: #000000; font-size: 12px; font-weight: 800; word-break: break-all;">{val}</span>
+            </div>
+        """, unsafe_allow_html=True)
 
-    with col_img:
-        if v_gorsel_link.startswith("http"):
-            st.markdown(f"""
-                <div class="img-container">
-                    <a href="{v_gorsel_link}" target="_blank">
+    tab_urun, tab_kar, tab_kargo = st.tabs(["📦 Ürün Bilgisi", "📊 Kâr Analizi", "🚚 Kargo/Desi"])
+
+    # ------------------------------------------------------------
+    # SEKME 1: ÜRÜN BİLGİSİ (görsel yan yana + kart bilgileri)
+    # ------------------------------------------------------------
+    with tab_urun:
+        col_img, col_detay = st.columns([1, 1.5])
+
+        with col_img:
+            if v_gorsel_link.startswith("http"):
+                st.markdown(f"""
+                    <input type="checkbox" id="imgToggle" class="lightbox-toggle">
+                    <label for="imgToggle" class="img-container">
                         <img src="{v_gorsel_link}" alt="Ürün Görseli">
-                    </a>
-                </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown("""
-                <div class="img-container" style="min-height: 200px;">
-                    <p style="color: #7f8c8d; font-weight: bold;">Görsel Linki Yok</p>
-                </div>
-            """, unsafe_allow_html=True)
+                    </label>
+                    <label for="imgToggle" class="lightbox-overlay">
+                        <img src="{v_gorsel_link}" class="lightbox-img" alt="Ürün Görseli Büyük">
+                    </label>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown("""
+                    <div class="img-container" style="min-height: 150px;">
+                        <p style="color: #7f8c8d; font-weight: bold;">Görsel Linki Yok</p>
+                    </div>
+                """, unsafe_allow_html=True)
 
-    with col_detay:
-        def render_native_card(label, val):
-            st.markdown(f"""
-                <div style="background-color: #f1f2f6; border: 1px solid #2c3e50; border-radius: 4px; padding: 6px 8px; margin-bottom: 4px;">
-                    <span style="color: #2980b9; font-size: 10px; font-weight: bold; text-transform: uppercase; display: block;">{label}</span>
-                    <span style="color: #000000; font-size: 12px; font-weight: 800; word-break: break-all;">{val}</span>
-                </div>
-            """, unsafe_allow_html=True)
+        with col_detay:
+            d1, d2 = st.columns(2)
+            render_native_card("Kod", v_kod, d1)
+            render_native_card("Barkod", v_barkod, d2)
 
-        d1, d2 = st.columns(2)
-        with d1: render_native_card("Kod", v_kod)
-        with d2: render_native_card("Barkod", v_barkod)
+            d3, d4 = st.columns(2)
+            render_native_card("TY ID", v_ty, d3)
+            render_native_card("HB SKU", v_hb, d4)
 
-        d3, d4 = st.columns(2)
-        with d3: render_native_card("TY ID", v_ty)
-        with d4: render_native_card("HB SKU", v_hb)
+            d5, d6 = st.columns(2)
+            render_native_card("Ted Adı", v_ted_adi, d5)
+            render_native_card("Ted Kd", v_ted_kd, d6)
 
-        d5, d6 = st.columns(2)
-        with d5: render_native_card("Ted Adı", v_ted_adi)
-        with d6: render_native_card("Ted Kd", v_ted_kd)
+            d7, d8 = st.columns(2)
+            render_native_card("Fiyat", format_money(v_fiyat), d7)
+            render_native_card("Kargo Fiyatı", format_money(v_kargo), d8)
 
-        d7, d8 = st.columns(2)
-        with d7: render_native_card("Fiyat", format_money(v_fiyat))
-        with d8: render_native_card("Kargo Fiyatı", format_money(v_kargo))
+            d9, d10 = st.columns(2)
+            render_native_card("Maliyet", format_money(v_maliyet), d9)
+            render_native_card("Termin", v_termin, d10)
 
-        d9, d10 = st.columns(2)
-        with d9: render_native_card("Maliyet", format_money(v_maliyet))
-        with d10: render_native_card("Termin", v_termin)
+            d13, d14 = st.columns(2)
+            render_native_card("Stok", v_stok, d13)
+            render_native_card("Katalog", v_katalog, d14)
 
-        d11, d12 = st.columns(2)
-        with d11: render_native_card("Koli Ölçüleri", v_koli)
-        with d12: render_native_card("Desi", v_desi)
+        # Az kullanılan ölçü/koli bilgileri — varsayılan kapalı
+        with st.expander("📐 Ölçü ve Koli Detayları"):
+            d11, d12 = st.columns(2)
+            render_native_card("Koli Ölçüleri", v_koli, d11)
+            render_native_card("Desi", v_desi, d12)
 
-        d13, d14 = st.columns(2)
-        with d13: render_native_card("Stok", v_stok)
-        with d14: render_native_card("Katalog", v_katalog)
+            o1, o2, o3, o4 = st.columns(4)
+            render_native_card("H", v_olcu_h, o1)
+            render_native_card("W", v_olcu_w, o2)
+            render_native_card("D", v_olcu_d, o3)
+            render_native_card("Ø", v_olcu_cap, o4)
 
-        o1, o2, o3, o4 = st.columns(4)
-        with o1: render_native_card("H", v_olcu_h)
-        with o2: render_native_card("W", v_olcu_w)
-        with o3: render_native_card("D", v_olcu_d)
-        with o4: render_native_card("Ø", v_olcu_cap)
-
-    st.divider()
-
-    # --- 3. BÖLÜM: PY KÂR ANALİZ İSTASYONU ---
-    st.markdown("<h3>📊 PY Kâr Analiz İstasyonu</h3>", unsafe_allow_html=True)
-    pk1, pk2 = st.columns([1, 2])
-
-    with pk1:
-        kom_oran = st.number_input("Komisyon (%)", value=23.5, step=0.1)
-        satis_fiyati_kdvli = st.number_input("Satış Fiyatı (KDV'li)", value=float(current_fiyat_raw) if current_fiyat_raw > 0 else 0.0, step=10.0)
+    # ------------------------------------------------------------
+    # SEKME 2: PY KÂR ANALİZ İSTASYONU
+    # ------------------------------------------------------------
+    with tab_kar:
+        pk1, pk2 = st.columns(2)
+        with pk1:
+            kom_oran = st.number_input("Komisyon (%)", value=23.5, step=0.1)
+        with pk2:
+            satis_fiyati_kdvli = st.number_input("Satış Fiyatı (KDV'li)", value=float(current_fiyat_raw) if current_fiyat_raw > 0 else 0.0, step=10.0)
 
         payda = (1.0 / 1.20) - (kom_oran / 120.0)
         if (current_maliyet_raw > 0 or current_kargo_raw > 0) and payda > 0:
@@ -410,7 +455,8 @@ if selected_row is not None and not selected_row.empty:
         else:
             st.markdown("**Min. Satış Fiyatı:** <span style='color:#3498db; font-size:15px; font-weight:bold;'>0.00 TL</span>", unsafe_allow_html=True)
 
-    with pk2:
+        st.divider()
+
         if satis_fiyati_kdvli > 0:
             satis_kdv_haric = satis_fiyati_kdvli / 1.20
             kom_kesintisi_brut = satis_fiyati_kdvli * (kom_oran / 100.0)
@@ -430,51 +476,55 @@ if selected_row is not None and not selected_row.empty:
             m2.markdown(f"<p style='color:#7f8c8d; font-size:11px; font-weight:bold;'>Maliyet+Kargo+Kom(Net)</p><p style='color:#e74c3c; font-size:16px; font-weight:bold;'>-- TL</p>", unsafe_allow_html=True)
             m3.markdown(f"<p style='color:#2ecc71; font-size:11px; font-weight:bold;'>Net Kâr (KDV Hariç)</p><p style='color:#2ecc71; font-size:18px; font-weight:bold;'>-- TL</p>", unsafe_allow_html=True)
 
-    st.divider()
+    # ------------------------------------------------------------
+    # SEKME 3: CANLI DESİ & KARGO FİYATLARI
+    # ------------------------------------------------------------
+    with tab_kargo:
+        d1, d2 = st.columns(2)
+        d3, d4 = st.columns(2)
 
-    st.markdown("<h3>📦 Canlı Desi & Kargo Fiyatları</h3>", unsafe_allow_html=True)
-    d1, d2, d3, d4 = st.columns(4)
+        init_en = clean_float(koli_w) if koli_w else 0.0
+        init_boy = clean_float(koli_l) if koli_l else 0.0
+        init_yuk = clean_float(koli_h) if koli_h else 0.0
 
-    init_en = clean_float(koli_w) if koli_w else 0.0
-    init_boy = clean_float(koli_l) if koli_l else 0.0
-    init_yuk = clean_float(koli_h) if koli_h else 0.0
+        c_en = d1.number_input("En", value=init_en)
+        c_boy = d2.number_input("Boy", value=init_boy)
+        c_yuk = d3.number_input("Yükseklik", value=init_yuk)
 
-    c_en = d1.number_input("En", value=init_en)
-    c_boy = d2.number_input("Boy", value=init_boy)
-    c_yuk = d3.number_input("Yükseklik", value=init_yuk)
+        calc_desi = (c_en * c_boy * c_yuk) / 3000.0 if (c_en > 0 and c_boy > 0 and c_yuk > 0) else 0.0
+        d4.markdown(f"<p style='color:#7f8c8d; font-size:11px; font-weight:bold;'>Sonuç Desi</p><p style='color:#3498db; font-size:18px; font-weight:bold;'>{calc_desi:.2f}</p>", unsafe_allow_html=True)
 
-    calc_desi = (c_en * c_boy * c_yuk) / 3000.0 if (c_en > 0 and c_boy > 0 and c_yuk > 0) else 0.0
-    d4.markdown(f"<p style='color:#7f8c8d; font-size:11px; font-weight:bold;'>Sonuç Desi</p><p style='color:#3498db; font-size:18px; font-weight:bold;'>{calc_desi:.2f}</p>", unsafe_allow_html=True)
+        st.divider()
 
-    # --- KARGO FİYATLARINI BASMA MOTORU ---
-    if calc_desi > 0 and kargo_dict:
-        desi_hedef = math.ceil(calc_desi)
-        try:
-            matched_key = None
-            if desi_hedef in kargo_dict:
-                matched_key = desi_hedef
-            else:
-                available_desis = sorted(kargo_dict.keys())
-                for d in available_desis:
-                    if d >= desi_hedef:
-                        matched_key = d
-                        break
-                if not matched_key and available_desis:
-                    matched_key = available_desis[-1]
+        # --- KARGO FİYATLARINI BASMA MOTORU ---
+        if calc_desi > 0 and kargo_dict:
+            desi_hedef = math.ceil(calc_desi)
+            try:
+                matched_key = None
+                if desi_hedef in kargo_dict:
+                    matched_key = desi_hedef
+                else:
+                    available_desis = sorted(kargo_dict.keys())
+                    for d in available_desis:
+                        if d >= desi_hedef:
+                            matched_key = d
+                            break
+                    if not matched_key and available_desis:
+                        matched_key = available_desis[-1]
 
-            if matched_key and matched_key in kargo_dict:
-                prices = kargo_dict[matched_key]
-                dhl_val = prices['DHL']
-                hj_val = prices['HJ']
-                hjxl_val = prices['HJXL']
+                if matched_key and matched_key in kargo_dict:
+                    prices = kargo_dict[matched_key]
+                    dhl_val = prices['DHL']
+                    hj_val = prices['HJ']
+                    hjxl_val = prices['HJXL']
 
-                kf1, kf2, kf3 = st.columns(3)
-                kf1.markdown(f"<p style='color:#7f8c8d; font-size:11px; font-weight:bold;'>DHL:</p><p style='color:#e67e22; font-size:16px; font-weight:bold;'>{format_money(dhl_val)}</p>", unsafe_allow_html=True)
-                kf2.markdown(f"<p style='color:#7f8c8d; font-size:11px; font-weight:bold;'>HJ:</p><p style='color:#9b59b6; font-size:16px; font-weight:bold;'>{format_money(hj_val)}</p>", unsafe_allow_html=True)
-                kf3.markdown(f"<p style='color:#7f8c8d; font-size:11px; font-weight:bold;'>HJXL:</p><p style='color:#e74c3c; font-size:16px; font-weight:bold;'>{format_money(hjxl_val)}</p>", unsafe_allow_html=True)
-            else:
-                st.warning(f"{desi_hedef} desi için kargo fiyatı bulunamadı.")
-        except Exception as ex:
-            st.error(f"Kargo hesaplama hatası: {ex}")
+                    kf1, kf2, kf3 = st.columns(3)
+                    kf1.markdown(f"<p style='color:#7f8c8d; font-size:11px; font-weight:bold;'>DHL:</p><p style='color:#e67e22; font-size:16px; font-weight:bold;'>{format_money(dhl_val)}</p>", unsafe_allow_html=True)
+                    kf2.markdown(f"<p style='color:#7f8c8d; font-size:11px; font-weight:bold;'>HJ:</p><p style='color:#9b59b6; font-size:16px; font-weight:bold;'>{format_money(hj_val)}</p>", unsafe_allow_html=True)
+                    kf3.markdown(f"<p style='color:#7f8c8d; font-size:11px; font-weight:bold;'>HJXL:</p><p style='color:#e74c3c; font-size:16px; font-weight:bold;'>{format_money(hjxl_val)}</p>", unsafe_allow_html=True)
+                else:
+                    st.warning(f"{desi_hedef} desi için kargo fiyatı bulunamadı.")
+            except Exception as ex:
+                st.error(f"Kargo hesaplama hatası: {ex}")
 else:
     st.info("Arama yapmak için yukarıdaki arama panelinden bir ürün seçiniz.")
