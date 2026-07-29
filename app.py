@@ -3,7 +3,8 @@ import streamlit as st
 # Şifre Koruma Alanı
 sifre = st.text_input("Lütfen Erişim Şifresini Girin:", type="password")
 
-if sifre != "avn1071":  # İstediğin şifreyi buraya yazabilirsin
+# .strip() boşlukları temizler, .lower() büyük/küçük harf sorununu çözer
+if sifre.strip().lower() != "avn1071":  
     st.warning("⚠️ Bu uygulama gizlidir. Devam etmek için şifre girmelisiniz.")
     st.stop()
 
